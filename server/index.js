@@ -56,8 +56,15 @@ app.post("/generate", async (req, res) => {
   try {
     console.log("STEP 1: request received");
 
-    const { topic } = req.body;
-    const lowerTopic = topic.toLowerCase();
+  const topic = req.body?.topic || req.body?.prompt || "";
+
+if (!topic) {
+  return res.status(400).json({
+    error: "Missing topic"
+  });
+}
+
+const lowerTopic = topic.toLowerCase();
 
     let voiceId = "qSeXEcewz7tA0Q0qk9fH";
 
