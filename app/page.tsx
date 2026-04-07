@@ -11,38 +11,41 @@ export default function Home() {
   const [history, setHistory] = useState<string[]>([]);
 
   const generateReel = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL ||
-        "https://ai-reel-studio-frontend-production.up.railway.app";
+    const API_URL =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://ai-reel-studio-backend-production.up.railway.app";
 
-      const res = await fetch(`${API_URL}/generate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          topic,
-          voice,
-          template,
-        }),
-      });
+    const res = await fetch(`${API_URL}/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        topic,
+        voice,
+        template,
+      }),
+    });
 
-      if (!res.ok) {
-        throw new Error("Failed to generate video");
-      }
-
-      const data = await res.json();
-      setVideoUrl(data.videoUrl);
-      setHistory((prev) => [data.videoUrl, ...prev]);
-    } catch (error) {
-      console.error("Frontend error:", error);
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || "Failed to generate video");
     }
-  };
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    setVideoUrl(url);
+    setHistory((prev) => [url, ...prev]);
+  } catch (error) {
+    console.error("Frontend error:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col items-center px-4 py-10">
