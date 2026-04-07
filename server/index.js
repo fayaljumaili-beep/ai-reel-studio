@@ -55,6 +55,8 @@ app.get("/", (req, res) => {
   res.json({ status: "Backend running" });
 });
 
+app.options("/generate, cors());"
+
 app.post("/generate", async (req, res) => {
   try {
     console.log("STEP 1: request received");
