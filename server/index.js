@@ -10,61 +10,64 @@ const axios = require("axios");
 const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
 
+const app = express();
+
+// --- middleware ---
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+app.options("*", cors());
+app.use(express.json());
+
+// --- clients ---
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const app = express();
-
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-app.options("*", cors());
-
-app.use(express.json());
-
-function createVideo(audioPath, videoPath, captionText) {
+// --- helpers ---
+function createVideo(audioPath, videoPath) {
   const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
 
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(videoPath)
       .input(audioPath)
-      .outputOptions([
-        "-map 0:v",
-        "-map 1:a",
-        "-shortest",
-        "-y"
-      ])
+      .outputOptions(["-map 0:v", "-map 1:a", "-shortest", "-y"])
       .videoCodec("libx264")
       .audioCodec("aac")
       .output(outputPath)
       .on("end", () => resolve(outputPath))
       .on("error", (err) => {
-        console.log("FFMPEG ERROR:", err.message);
+        console.error("FFMPEG ERROR:", err.message);
         reject(err);
       })
       .run();
   });
 }
 
+// --- routes ---
+app.get("/", (req, res) => {
+  res.json({ status: "Backend running" });
+});
+
 app.post("/generate", async (req, res) => {
   try {
     console.log("STEP 1: request received");
 
-  const topic = req.body?.topic || req.body?.prompt || "";
+    const topic = req.body?.topic || req.body?.prompt || "";
 
-if (!topic) {
-  return res.status(400).json({
-    error: "Missing topic"
-  });
-}
+    if (!topic.trim()) {
+      return res.status(400).json({
+        error: "Missing topic",
+      });
+    }
 
-const lowerTopic = topic.toLowerCase();
+    const lowerTopic = topic.toLowerCase();
 
     let voiceId = "qSeXEcewz7tA0Q0qk9fH";
 
@@ -90,10 +93,10 @@ const lowerTopic = topic.toLowerCase();
     console.log("STEP 2: script generated");
 
     const script =
-      completion.choices[0].message.content ||
+      completion.choices?.[0]?.message?.content ||
       `Stay focused on ${topic} and never give up.`;
 
-    const response = await axios.post(
+    const ttsResponse = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
         text: script,
@@ -112,7 +115,7 @@ const lowerTopic = topic.toLowerCase();
     console.log("STEP 3: audio generated");
 
     const audioPath = path.join(__dirname, "output.mp3");
-    fs.writeFileSync(audioPath, response.data);
+    fs.writeFileSync(audioPath, ttsResponse.data);
 
     let selectedVideo = "bg.mp4";
 
@@ -127,23 +130,23 @@ const lowerTopic = topic.toLowerCase();
     }
 
     const videoPath = path.join(__dirname, "assets", selectedVideo);
-
-    const outputPath = await createVideo(audioPath, videoPath, script);
+    const outputPath = await createVideo(audioPath, videoPath);
 
     console.log("STEP 4: video created");
 
-    res.download(outputPath);
+    return res.download(outputPath);
   } catch (error) {
-    console.error("FULL ERROR:", error.message);
-    res.status(500).json({
+    console.error("FULL ERROR:", error.response?.data || error.message);
+
+    return res.status(500).json({
       error: "Video generation failed",
       details: error.message,
     });
   }
 });
 
+// --- start server ---
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
