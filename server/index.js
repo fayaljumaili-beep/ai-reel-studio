@@ -14,20 +14,18 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const express = require("express");
-const cors = require("cors");
-
 const app = express();
 
-const corsOptions = {
+app.use(cors({
   origin: true,
   credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
-};
+}));
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options("*", cors());
+
+app.use(express.json());
 
 function createVideo(audioPath, videoPath, captionText) {
   const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
