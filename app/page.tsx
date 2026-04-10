@@ -10,7 +10,7 @@ export default function HomePage() {
   const handleGenerate = async () => {
     try {
       const response = await fetch(
-        "https://ai-reel-studio-frontend-production.up.railway.app/generate";
+        "https://ai-reel-studio-frontend-production.up.railway.app/generate",
         {
           method: "POST",
           headers: {
@@ -25,7 +25,6 @@ export default function HomePage() {
       );
 
       const data = await response.json();
-      console.log("SUCCESS:", data);
       alert(JSON.stringify(data, null, 2));
     } catch (error) {
       console.error("Frontend error:", error);
@@ -35,56 +34,47 @@ export default function HomePage() {
 
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1 style={{ fontSize: "48px", marginBottom: "20px" }}>
-        🎬 AI Reel Studio
-      </h1>
+      <h1>🎬 AI Reel Studio</h1>
 
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder="Enter reel topic..."
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          style={{
-            padding: "10px",
-            width: "300px",
-            border: "1px solid #ccc",
-          }}
-        />
+      <input
+        value={topic}
+        onChange={(e) => setTopic(e.target.value)}
+        placeholder="Enter reel topic"
+        style={{ padding: "10px", width: "300px", display: "block", marginBottom: "10px" }}
+      />
 
-        <select
-          value={voice}
-          onChange={(e) => setVoice(e.target.value)}
-          style={{ padding: "10px" }}
-        >
-          <option>Motivational</option>
-          <option>Storytelling</option>
-          <option>Educational</option>
-        </select>
+      <select
+        value={voice}
+        onChange={(e) => setVoice(e.target.value)}
+        style={{ padding: "10px", marginBottom: "10px", display: "block" }}
+      >
+        <option>Motivational</option>
+        <option>Storytelling</option>
+        <option>Educational</option>
+      </select>
 
-        <select
-          value={template}
-          onChange={(e) => setTemplate(e.target.value)}
-          style={{ padding: "10px" }}
-        >
-          <option>Rich Mindset</option>
-          <option>Luxury Lifestyle</option>
-          <option>Success Blueprint</option>
-        </select>
+      <select
+        value={template}
+        onChange={(e) => setTemplate(e.target.value)}
+        style={{ padding: "10px", marginBottom: "10px", display: "block" }}
+      >
+        <option>Rich Mindset</option>
+        <option>Success Blueprint</option>
+        <option>Luxury Lifestyle</option>
+      </select>
 
-        <button
-          onClick={handleGenerate}
-          style={{
-            padding: "10px 20px",
-            background: "black",
-            color: "white",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          ✨ Generate Reel
-        </button>
-      </div>
+      <button
+        onClick={handleGenerate}
+        style={{
+          padding: "12px 20px",
+          background: "black",
+          color: "white",
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
+        ✨ Generate Reel
+      </button>
     </main>
   );
 }
