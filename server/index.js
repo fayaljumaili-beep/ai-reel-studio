@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
-const { exec } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 
@@ -31,23 +32,15 @@ Follow for more ${template} content.`;
 });
 
 app.post("/generate-video", (req, res) => {
-  const outputPath = "/tmp/viral-reel.mp4";
+  const filePath = path.join(__dirname, "sample.mp4");
 
-  const cmd =
-    `ffmpeg -y -f lavfi -i color=c=black:s=1080x1920:d=8 ` +
-    `-pix_fmt yuv420p ${outputPath}`;
+  if (!fs.existsSync(filePath)) {
+    return res.status(500).json({
+      error: "sample.mp4 missing in server folder",
+    });
+  }
 
-  exec(cmd, (error, stdout, stderr) => {
-    if (error) {
-      console.error("FFMPEG ERROR:", stderr);
-      return res.status(500).json({
-        error: "Video generation failed",
-        details: stderr,
-      });
-    }
-
-    return res.download(outputPath, "viral-reel.mp4");
-  });
+  return res.download(filePath, "viral-reel-final.mp4");
 });
 
 const PORT = process.env.PORT || 8080;
