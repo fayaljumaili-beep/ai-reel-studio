@@ -10,7 +10,7 @@ export default function HomePage() {
   const handleGenerate = async () => {
     try {
       const response = await fetch(
-        "https://ai-reel-studio-backend-production.up.railway.app/generate",
+        "https://ai-reel-studio-frontend-production.up.railway.app/generate";
         {
           method: "POST",
           headers: {
