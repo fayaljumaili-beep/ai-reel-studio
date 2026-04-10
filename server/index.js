@@ -46,13 +46,26 @@ app.post("/generate", async (req, res) => {
   try {
     const { topic, voice, template } = req.body;
 
-    return res.json({
-      success: true,
-      message: "Generate route is working",
-      topic,
-      voice,
-      template,
-    });
+   const script = `
+Hook: Want to know ${topic}?
+
+Main:
+Here are 3 mindset shifts used by highly successful people.
+1. Stay disciplined
+2. Think long term
+3. Execute daily
+
+CTA:
+Follow for more ${template} content.
+`;
+
+return res.json({
+  success: true,
+  script,
+  topic,
+  voice,
+  template,
+});
   } catch (error) {
     console.error("Generate route error:", error);
 
