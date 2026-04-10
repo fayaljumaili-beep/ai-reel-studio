@@ -6,9 +6,7 @@ const cors = require("cors");
 const app = express();
 
 /**
- * CORS
- * Use wildcard first to fully kill the browser preflight issue.
- * Later we can lock this down to your Vercel domain.
+ * Global CORS
  */
 app.use(
   cors({
@@ -31,30 +29,13 @@ app.get("/", (req, res) => {
 });
 
 /**
- * IMPORTANT:
- * Handle browser preflight for /generate
+ * Generate route
  */
-app.options("/generate", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  return res.sendStatus(200);
-});
+app.options("/generate", cors());
 
 app.post("/generate", async (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
   try {
     const { topic, voice, template } = req.body;
-
-    if (!topic) {
-      return res.status(400).json({
-        success: false,
-        error: "Topic is required",
-      });
-    }
 
     return res.json({
       success: true,
@@ -62,14 +43,12 @@ app.post("/generate", async (req, res) => {
       topic,
       voice,
       template,
-      videoUrl: null,
     });
   } catch (error) {
-    console.error("Generate error:", error);
-
+    console.error("Generate route error:", error);
     return res.status(500).json({
       success: false,
-      error: error.message || "Server error",
+      error: error.message,
     });
   }
 });
