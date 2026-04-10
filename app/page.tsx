@@ -6,6 +6,7 @@ export default function HomePage() {
   const [topic, setTopic] = useState("");
   const [voice, setVoice] = useState("Motivational");
   const [template, setTemplate] = useState("Rich Mindset");
+  const [result, setResult] = useState<any>(null);
 
   const handleGenerate = async () => {
     try {
@@ -25,7 +26,7 @@ export default function HomePage() {
       );
 
       const data = await response.json();
-      alert(JSON.stringify(data, null, 2));
+      setResult(data);
     } catch (error) {
       console.error("Frontend error:", error);
       alert("Something went wrong");
@@ -78,3 +79,24 @@ export default function HomePage() {
     </main>
   );
 }
+{result && (
+  <div
+    style={{
+      marginTop: "30px",
+      whiteSpace: "pre-wrap",
+      padding: "20px",
+      border: "1px solid #ccc",
+      borderRadius: "10px",
+      maxWidth: "600px",
+    }}
+  >
+    <h2>🎬 Generated Reel Script</h2>
+    <p>{result.script}</p>
+  </div>
+)}
+{result && (
+  <div style={{ marginTop: "30px", whiteSpace: "pre-wrap" }}>
+    <h2>Generated Reel Script</h2>
+    <p>{result.script}</p>
+  </div>
+)}
