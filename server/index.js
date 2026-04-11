@@ -20,29 +20,27 @@ app.post("/generate", async (req, res) => {
   try {
     const { topic } = req.body;
 
-    const prompt = `
-Create a short viral faceless reel script about: "${topic}"
-
-Format:
-HOOK
-SCENES (3 short scenes)
-CTA
-VOICEOVER
-
-Make it punchy, motivational, and TikTok style.
-`;
-
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: `Create a faceless viral reel script about ${topic} with:
+HOOK
+SCENES
+CTA
+VOICEOVER`,
+        },
+      ],
     });
 
-    const script = response.choices[0].message.content;
-    res.json({ script });
+    res.json({
+      script: response.choices[0].message.content,
+    });
   } catch (error) {
-    console.error("❌ Script generation error:", error);
+    console.error("Generate error:", error);
     res.status(500).json({
-      error: "Failed to generate script",
+      error: "Script generation failed",
       details: error.message,
     });
   }
@@ -52,23 +50,29 @@ app.post("/generate-voice", async (req, res) => {
   try {
     const { text } = req.body;
 
-    const mp3 = await openai.audio.speech.create({
+    const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice: "alloy",
       input: text || "This is your AI generated faceless reel.",
     });
 
-    const audioBuffer = Buffer.from(await mp3.arrayBuffer());
-    const audioPath = path.join(process.cwd(), "voiceover.mp3");
+    const buffer = Buffer.from(await speech.arrayBuffer());
 
-    fs.writeFileSync(audioPath, audioBuffer);
+    if (!buffer || buffer.length === 0) {
+      throw new Error("OpenAI returned empty audio");
+    }
+
+    const audioPath = path.join(process.cwd(), "voiceover.mp3");
+    fs.writeFileSync(audioPath, buffer);
+
+    console.log("✅ voice bytes:", buffer.length);
 
     res.json({
       success: true,
-      audioUrl: "/voiceover.mp3",
+      audioUrl: `${req.protocol}://${req.get("host")}/voiceover.mp3`,
     });
   } catch (error) {
-    console.error("❌ Voice generation error:", error);
+    console.error("Voice error:", error);
     res.status(500).json({
       error: "Voice generation failed",
       details: error.message,
@@ -78,11 +82,6 @@ app.post("/generate-voice", async (req, res) => {
 
 app.get("/voiceover.mp3", (req, res) => {
   const audioPath = path.join(process.cwd(), "voiceover.mp3");
-
-  if (!fs.existsSync(audioPath)) {
-    return res.status(404).json({ error: "Voice file not found" });
-  }
-
   res.sendFile(audioPath);
 });
 
@@ -91,46 +90,41 @@ app.post("/generate-video", async (req, res) => {
     const audioPath = path.join(process.cwd(), "voiceover.mp3");
     const outputPath = path.join(process.cwd(), "final-reel.mp4");
 
-    console.log("🎵 audio path:", audioPath);
-    console.log("📦 output path:", outputPath);
+    if (!fs.existsSync(audioPath)) {
+      throw new Error("voiceover.mp3 missing");
+    }
 
     ffmpeg()
-      .input("color=c=black:s=1080x1920:d=30")
+      .input("color=c=black:s=720x1280:d=20")
       .inputFormat("lavfi")
       .input(audioPath)
       .videoCodec("libx264")
       .audioCodec("aac")
       .outputOptions([
+        "-preset ultrafast",
+        "-crf 32",
+        "-r 15",
         "-pix_fmt yuv420p",
         "-movflags +faststart",
-        "-shortest",
+        "-shortest"
       ])
       .save(outputPath)
       .on("end", () => {
-        console.log("✅ video created:", outputPath);
-
-        setTimeout(() => {
-          if (!fs.existsSync(outputPath)) {
-            return res.status(500).json({
-              error: "Output file missing after render",
-            });
-          }
-
-          res.download(outputPath, "viral-reel.mp4");
-        }, 500);
+        console.log("✅ final video ready");
+        res.download(outputPath, "viral-reel.mp4");
       })
       .on("error", (err, stdout, stderr) => {
-        console.error("❌ FFMPEG ERROR:", err.message);
-        console.error("📤 STDOUT:", stdout);
-        console.error("📥 STDERR:", stderr);
+        console.error("FFMPEG ERROR:", err.message);
+        console.error("STDOUT:", stdout);
+        console.error("STDERR:", stderr);
 
         res.status(500).json({
-          error: "FFmpeg merge failed",
+          error: "Video generation failed",
           details: stderr || err.message,
         });
       });
   } catch (error) {
-    console.error("❌ Video route crash:", error);
+    console.error("Video route crash:", error);
     res.status(500).json({
       error: "Video generation failed",
       details: error.message,
