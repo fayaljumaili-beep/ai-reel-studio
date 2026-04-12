@@ -108,11 +108,17 @@ app.post("/generate-video", async (req, res) => {
 
     // 2) Download audio
     const audioPath = "./voice.mp3";
-    const audioResponse = await axios({
-      method: "GET",
-      url: audioUrl,
-      responseType: "stream",
-    });
+   if (!audioUrl || !audioUrl.startsWith("http")) {
+  return res.status(400).json({
+    error: "Invalid or missing audioUrl from frontend",
+  });
+}
+
+const audioResponse = await axios({
+  method: "GET",
+  url: audioUrl,
+  responseType: "stream",
+});
 
     const writer = fs.createWriteStream(audioPath);
     audioResponse.data.pipe(writer);
