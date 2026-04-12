@@ -2,113 +2,111 @@
 
 import { useState } from "react";
 
-export default function Home() {
+export default function Page() {
   const [prompt, setPrompt] = useState("");
-  const [script, setScript] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  const API = process.env.NEXT_PUBLIC_API_URL;
-
-  const generateScript = async () => {
-    if (!prompt.trim()) return alert("Enter a prompt");
-    setLoading(true);
+  const generateVoiceover = async () => {
+    if (isGenerating) return;
 
     try {
-      const res = await fetch(`${API}/generate`, {
+      setIsGenerating(true);
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate-script`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ text: prompt }),
       });
 
-      const data = await res.json();
-      setScript(data.script || "No script generated");
-    } catch {
-      alert("Script generation failed");
-    }
-
-    setLoading(false);
-  };
-
-  const generateVoice = async () => {
-    if (!script.trim()) return alert("Generate a script first");
-
-    try {
-      const res = await fetch(`${API}/voiceover`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: script }),
-      });
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "voiceover.mp3";
-      a.click();
-    } catch {
-      alert("Voice generation failed");
+      const data = await response.json();
+      setOutput(data.script || data.output || "No script generated.");
+    } catch (error) {
+      console.error("SCRIPT ERROR:", error);
+      setOutput("Failed to generate script.");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
-  const downloadVideo = async () => {
-    if (!script.trim()) return alert("Generate a script first");
+  const downloadNarratedReel = async () => {
+    if (isDownloading || !output) return;
 
     try {
-      const res = await fetch(`${API}/generate-video`, {
+      setIsDownloading(true);
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate-video`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: script }),
+        body: JSON.stringify({ text: output }),
       });
 
-      const blob = await res.blob();
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
       a.download = "viral-reel.mp4";
+      document.body.appendChild(a);
       a.click();
-    } catch {
-      alert("Video generation failed");
+      a.remove();
+
+      setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+    } catch (error) {
+      console.error("DOWNLOAD ERROR:", error);
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   return (
-    <main style={{ padding: 40 }}>
-      <h1>Faceless Reel Scripts in 5 Seconds</h1>
+    <main style={{ padding: "40px", fontFamily: "serif" }}>
+      <h1 style={{ fontSize: "48px", fontWeight: "bold" }}>
+        Faceless Reel Scripts in 5 Seconds
+      </h1>
 
-      <p>LIVE SAAS MODE 🚀</p>
+      <p style={{ marginTop: 12 }}>LIVE SAAS MODE 🚀</p>
 
       <input
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        placeholder="Enter your reel topic"
-        style={{ width: 400, padding: 10 }}
+        placeholder="Enter reel topic"
+        style={{
+          width: "100%",
+          maxWidth: 600,
+          padding: 12,
+          marginTop: 20,
+          marginBottom: 20,
+          border: "1px solid #ccc",
+        }}
       />
 
-      <br />
-      <br />
+      <div style={{ display: "flex", gap: 12, marginBottom: 30 }}>
+        <button onClick={generateVoiceover} disabled={isGenerating}>
+          {isGenerating ? "Generating..." : "🎙️ Generate AI Voiceover"}
+        </button>
 
-      <button onClick={generateScript} disabled={loading}>
-        {loading ? "Generating..." : "✨ Generate Premium Reel Script"}
-      </button>
+        <button onClick={downloadNarratedReel} disabled={isDownloading || !output}>
+          {isDownloading ? "Downloading..." : "⬇️ Download Narrated Reel"}
+        </button>
+      </div>
 
-      <button onClick={generateVoice} style={{ marginLeft: 10 }}>
-        🎙 Generate AI Voiceover
-      </button>
-
-      <button onClick={downloadVideo} style={{ marginLeft: 10 }}>
-        🎬 Download Narrated Reel
-      </button>
-
-      <h2 style={{ marginTop: 40 }}>Generated Output</h2>
-      <pre style={{ whiteSpace: "pre-wrap" }}>{script}</pre>
+      <h2>Generated Output</h2>
+      <pre
+        style={{
+          whiteSpace: "pre-wrap",
+          lineHeight: 1.5,
+          fontSize: 20,
+          maxWidth: 900,
+        }}
+      >
+        {output}
+      </pre>
     </main>
   );
 }
