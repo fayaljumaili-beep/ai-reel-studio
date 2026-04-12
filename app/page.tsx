@@ -1,109 +1,72 @@
 "use client";
-
-import { useState } from "react";
-
-export default function Home() {
-  const [topic, setTopic] = useState("");
-  const [script, setScript] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
-
-  const API = "https://ai-reel-studio-frontend-production.up.railway.app";
-
-  async function generateScript() {
-    const res = await fetch(`${API}/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ topic }),
-    });
-
-    const data = await res.json();
-
-    setScript(data.script || "");
-  }
-
-  async function generateVoice() {
-    const textToSpeak =
-      script ||
-      "This is your AI generated faceless reel about success and mindset.";
-
-    const res = await fetch(`${API}/generate-voice`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: textToSpeak,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (data.audioUrl) {
-      setAudioUrl(data.audioUrl);
-    }
-  }
-
-  async function downloadVideo() {
-    const res = await fetch(`${API}/generate-video`, {
-      method: "POST",
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.error || "Video generation failed");
-      return;
-    }
-
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "viral-reel.mp4";
-    a.click();
-  }
+  };
 
   return (
-    <main style={{ padding: "40px", fontFamily: "serif" }}>
-      <h1>Faceless Reel Scripts in 5 Seconds</h1>
-      <p>LIVE SAAS MODE 🚀</p>
+    <main className="min-h-screen p-10 max-w-4xl mx-auto">
+      <h1 className="text-5xl font-bold mb-4">Faceless Reel Scripts in 5 Seconds</h1>
+      <p className="mb-6 text-lg">LIVE SAAS MODE 🚀</p>
 
-      <input
-        value={topic}
-        onChange={(e) => setTopic(e.target.value)}
-        placeholder="type topic"
-      />
+      <div className="space-y-4 mb-6">
+        <input
+          className="border px-3 py-2 w-full"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="Enter topic"
+        />
 
-      <br />
-      <br />
+        <div className="flex gap-3">
+          <select
+            className="border px-3 py-2"
+            value={style}
+            onChange={(e) => setStyle(e.target.value)}
+          >
+            <option>Motivational</option>
+            <option>Luxury</option>
+            <option>Educational</option>
+          </select>
 
-      <button onClick={generateScript}>
-        ✨ Generate Premium Reel Script
-      </button>
+          <select
+            className="border px-3 py-2"
+            value={tone}
+            onChange={(e) => setTone(e.target.value)}
+          >
+            <option>Rich Mindset</option>
+            <option>Luxury Lifestyle</option>
+            <option>Authority</option>
+          </select>
+        </div>
 
-      <button onClick={generateVoice} style={{ marginLeft: 10 }}>
-        🎙 Generate AI Voiceover
-      </button>
+        <div className="flex gap-3 flex-wrap">
+          <button className="border px-4 py-2" onClick={generateScript}>
+            {loadingScript ? "Generating..." : "✨ Generate Premium Reel Script"}
+          </button>
+          <button className="border px-4 py-2" onClick={generateVoice}>
+            {loadingVoice ? "Generating Voice..." : "🎙️ Generate AI Voiceover"}
+          </button>
+          <button className="border px-4 py-2" onClick={downloadVideo}>
+            {loadingVideo ? "Rendering Video..." : "🎬 Download Narrated Reel Video"}
+          </button>
+        </div>
+      </div>
 
-      <button onClick={downloadVideo} style={{ marginLeft: 10 }}>
-        🎬 Download Narrated Reel Video
-      </button>
+      <section className="space-y-4">
+        <h2 className="text-3xl font-semibold">Generated Output</h2>
 
-      <h2 style={{ marginTop: 40 }}>Generated Output</h2>
+        {script && (
+          <pre className="whitespace-pre-wrap border p-4 rounded-xl bg-gray-50">
+            {script}
+          </pre>
+        )}
 
-      <pre style={{ whiteSpace: "pre-wrap" }}>{script}</pre>
-
-      {audioUrl && (
-        <>
-          <audio controls src={audioUrl} />
-          <br />
-          <a href={audioUrl} download="voiceover.mp3">
-            ⬇ Download Voiceover
-          </a>
-        </>
-      )}
+        {voiceUrl && (
+          <div className="space-y-2">
+            <audio controls src={voiceUrl} className="w-full" />
+            <a className="underline" href={voiceUrl} download>
+              ⬇ Download Voiceover
+            </a>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
