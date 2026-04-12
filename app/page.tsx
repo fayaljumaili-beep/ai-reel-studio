@@ -1,111 +1,89 @@
 "use client";
-
-import { useState } from "react";
-
-export default function Page() {
-  const [prompt, setPrompt] = useState("");
-  const [output, setOutput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const generateVoiceover = async () => {
-    if (isGenerating) return;
-
-    try {
-      setIsGenerating(true);
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate-script`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: prompt }),
-      });
-
-      const data = await response.json();
-      setOutput(data.script || data.output || "No script generated.");
-    } catch (error) {
-      console.error("SCRIPT ERROR:", error);
-      setOutput("Failed to generate script.");
-    } finally {
-      setIsGenerating(false);
     }
   };
 
-  const downloadNarratedReel = async () => {
-    if (isDownloading || !output) return;
+  const downloadVideo = async () => {
+    if (!script.trim() || isDownloadingVideo) return;
 
     try {
-      setIsDownloading(true);
+      setIsDownloadingVideo(true);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate-video`, {
+      const res = await fetch(`${API}/generate-video`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: output }),
+        body: JSON.stringify({ text: script }),
       });
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      if (!res.ok) {
+        throw new Error("Video generation failed");
+      }
 
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "viral-reel.mp4";
+      a.download = "viral-stock-reel.mp4";
       document.body.appendChild(a);
       a.click();
       a.remove();
-
       setTimeout(() => window.URL.revokeObjectURL(url), 2000);
     } catch (error) {
-      console.error("DOWNLOAD ERROR:", error);
+      console.error("VIDEO ERROR:", error);
+      alert("Video generation failed");
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingVideo(false);
     }
   };
 
   return (
-    <main style={{ padding: "40px", fontFamily: "serif" }}>
-      <h1 style={{ fontSize: "48px", fontWeight: "bold" }}>
-        Faceless Reel Scripts in 5 Seconds
+    <main style={{ padding: 40, fontFamily: "serif" }}>
+      <h1 style={{ fontSize: 48, fontWeight: 700 }}>
+        Faceless Reel Studio
       </h1>
 
-      <p style={{ marginTop: 12 }}>LIVE SAAS MODE 🚀</p>
+      <p style={{ marginTop: 10, marginBottom: 20 }}>
+        Prompt → Script → Voice → Stock Visual Reel 🚀
+      </p>
 
       <input
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        placeholder="Enter reel topic"
+        placeholder="Enter your reel topic"
         style={{
           width: "100%",
-          maxWidth: 600,
+          maxWidth: 700,
           padding: 12,
-          marginTop: 20,
-          marginBottom: 20,
           border: "1px solid #ccc",
+          marginBottom: 20,
         }}
       />
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 30 }}>
-        <button onClick={generateVoiceover} disabled={isGenerating}>
-          {isGenerating ? "Generating..." : "🎙️ Generate AI Voiceover"}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button onClick={generateScript} disabled={isGeneratingScript}>
+          {isGeneratingScript ? "Generating..." : "✨ Generate Script"}
         </button>
 
-        <button onClick={downloadNarratedReel} disabled={isDownloading || !output}>
-          {isDownloading ? "Downloading..." : "⬇️ Download Narrated Reel"}
+        <button onClick={generateVoice} disabled={!script || isGeneratingVoice}>
+          {isGeneratingVoice ? "Generating..." : "🎙️ Generate Voice"}
+        </button>
+
+        <button onClick={downloadVideo} disabled={!script || isDownloadingVideo}>
+          {isDownloadingVideo ? "Rendering..." : "🎬 Download Stock Reel"}
         </button>
       </div>
 
-      <h2>Generated Output</h2>
+      <h2 style={{ marginTop: 40 }}>Generated Script</h2>
       <pre
         style={{
           whiteSpace: "pre-wrap",
-          lineHeight: 1.5,
-          fontSize: 20,
+          lineHeight: 1.6,
+          fontSize: 18,
           maxWidth: 900,
         }}
       >
-        {output}
+        {script}
       </pre>
     </main>
   );
