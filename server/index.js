@@ -91,25 +91,28 @@ app.post("/generate-video", async (req, res) => {
 
     // your existing voice generation stays above this
 
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input("color=c=black:s=720x1280:d=8")
-        .inputFormat("lavfi")
-        .input(audioPath)
-        .videoCodec("libx264")
-        .audioCodec("aac")
-        .outputOptions([
-          "-pix_fmt yuv420p",
-          "-profile:v baseline",
-          "-level 3.0",
-          "-movflags +faststart",
-          "-shortest",
-          "-r 24"
-        ])
-        .save(outputPath)
-        .on("end", resolve)
-        .on("error", reject);
-    });
+  await new Promise((resolve, reject) => {
+  ffmpeg()
+    .input("color=c=black:s=720x1280:d=8")
+    .inputFormat("lavfi")
+    .input(audioPath)
+    .videoCodec("libx264")
+    .audioCodec("aac")
+    .audioFrequency(44100)
+    .audioChannels(2)
+    .outputOptions([
+      "-pix_fmt yuv420p",
+      "-profile:v baseline",
+      "-level 3.0",
+      "-movflags +faststart",
+      "-shortest",
+      "-r 24",
+      "-b:a 128k"
+    ])
+    .save(outputPath)
+    .on("end", resolve)
+    .on("error", reject);
+});
 
     return res.download(outputPath);
   } catch (error) {
