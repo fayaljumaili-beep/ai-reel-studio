@@ -120,6 +120,7 @@ app.get("/voiceover.mp3", (req, res) => {
 app.post("/generate-video", async (req, res) => {
   try {
     const audioPath = path.join(__dirname, "voiceover.mp3");
+    const imagePath = path.join(__dirname, "black.png");
     const outputPath = path.join(__dirname, "viral-reel.mp4");
 
     if (!fs.existsSync(audioPath)) {
@@ -128,15 +129,24 @@ app.post("/generate-video", async (req, res) => {
       });
     }
 
+    // create a tiny valid black PNG once
+    if (!fs.existsSync(imagePath)) {
+      const blackPixel = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0XcAAAAASUVORK5CYII=",
+        "base64"
+      );
+      fs.writeFileSync(imagePath, blackPixel);
+    }
+
     ffmpeg()
-      .input("color=c=black:s=720x1280:r=24")
-      .inputFormat("lavfi")
+      .input(imagePath)
+      .loop(8)
       .input(audioPath)
       .outputOptions([
         "-shortest",
+        "-vf scale=720:1280",
         "-c:v libx264",
         "-preset ultrafast",
-        "-tune stillimage",
         "-pix_fmt yuv420p",
         "-movflags +faststart",
         "-c:a aac",
@@ -145,11 +155,11 @@ app.post("/generate-video", async (req, res) => {
       ])
       .output(outputPath)
       .on("end", () => {
-        console.log("✅ Railway-safe MP4 finished");
+        console.log("✅ FINAL REAL PNG-BASED MP4 READY");
         return res.download(outputPath, "viral-reel.mp4");
       })
       .on("error", (err) => {
-        console.error("FFMPEG LOW MEM ERROR:", err);
+        console.error("PNG VIDEO ERROR:", err);
         return res.status(500).json({
           error: "Video generation failed",
           details: err.message,
