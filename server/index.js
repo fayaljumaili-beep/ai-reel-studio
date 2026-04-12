@@ -75,7 +75,6 @@ app.post("/generate-video", async (req, res) => {
     const outputPath = "/app/viral-reel.mp4";
     const imagePath = "/app/frame.png";
 
-    // tiny black png placeholder
     const blackPngBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlAbwAAAABJRU5ErkJggg==";
 
@@ -83,23 +82,27 @@ app.post("/generate-video", async (req, res) => {
 
     ffmpeg()
       .input(imagePath)
-      .loop(10)
+      .loop(8)
       .input(audioPath)
       .videoCodec("libx264")
       .audioCodec("aac")
       .size("720x1280")
+      .fps(24)
       .outputOptions([
+        "-preset ultrafast",
+        "-tune stillimage",
         "-pix_fmt yuv420p",
         "-movflags +faststart",
+        "-threads 1",
         "-shortest",
       ])
       .save(outputPath)
       .on("end", () => {
-        console.log("✅ FINAL REAL PNG-BASED MP4 READY");
+        console.log("✅ LOW MEMORY MP4 READY");
         res.download(outputPath, "viral-reel.mp4");
       })
       .on("error", (err) => {
-        console.error("FFMPEG FINAL REAL ERROR:", err);
+        console.error("FFMPEG LOW MEMORY ERROR:", err);
         res.status(500).send("Video generation failed");
       });
   } catch (error) {
@@ -107,7 +110,6 @@ app.post("/generate-video", async (req, res) => {
     res.status(500).send("Video generation failed");
   }
 });
-
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });
