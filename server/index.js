@@ -119,12 +119,6 @@ app.get("/voiceover.mp3", (req, res) => {
  */
 app.post("/generate-video", async (req, res) => {
   try {
-    const { script } = req.body;
-
-    if (!script?.trim()) {
-      return res.status(400).json({ error: "Script required" });
-    }
-
     const audioPath = path.join(__dirname, "voiceover.mp3");
     const outputPath = path.join(__dirname, "viral-reel.mp4");
 
@@ -135,29 +129,32 @@ app.post("/generate-video", async (req, res) => {
     }
 
     ffmpeg()
-      .input("color=c=black:s=1080x1920:d=8")
-      .inputFormat("lavfi")
       .input(audioPath)
-      .videoCodec("libx264")
-      .audioCodec("aac")
+      .input("color=c=black:s=1080x1920:r=30")
+      .inputFormat("lavfi")
       .outputOptions([
+        "-t 8",
         "-shortest",
+        "-c:v libx264",
+        "-preset veryfast",
         "-pix_fmt yuv420p",
         "-movflags +faststart",
+        "-c:a aac",
+        "-b:a 192k"
       ])
       .save(outputPath)
       .on("end", () => {
-        console.log("✅ MP4 generated");
-
+        console.log("✅ REAL MP4 finished");
         return res.download(outputPath, "viral-reel.mp4");
       })
       .on("error", (err) => {
-        console.error("FFmpeg video error:", err);
+        console.error("FFMPEG FINAL ERROR:", err);
         return res.status(500).json({
           error: "Video generation failed",
           details: err.message,
         });
       });
+
   } catch (error) {
     console.error("Video route crash:", error);
     res.status(500).json({
