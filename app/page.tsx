@@ -1,4 +1,42 @@
 "use client";
+      console.error(error);
+      alert("Voice generation failed");
+    } finally {
+      setLoadingVoice(false);
+    }
+  };
+
+  const generateVideo = async () => {
+    if (!script.trim()) {
+      alert("Generate script first");
+      return;
+    }
+
+    setLoadingVideo(true);
+
+    try {
+      const res = await fetch(`${API}/generate-video`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          script,
+          captionText: script.split("\n")[0] || script,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Video generation failed");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      setVideoUrl(url);
+    } catch (error) {
+      console.error(error);
+      alert("Video generation failed");
     } finally {
       setLoadingVideo(false);
     }
@@ -55,11 +93,7 @@
         <div className="mb-6">
           <h3 className="font-semibold mb-2">VOICEOVER</h3>
           <audio controls src={audioUrl} className="w-full" />
-          <a
-            href={audioUrl}
-            download
-            className="block mt-2 underline"
-          >
+          <a href={audioUrl} download className="block mt-2 underline">
             ⬇️ Download Voiceover
           </a>
         </div>
