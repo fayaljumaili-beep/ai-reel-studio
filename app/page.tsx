@@ -15,9 +15,8 @@ export default function Home() {
   const [loadingVideo, setLoadingVideo] = useState(false);
 
   const generateScript = async () => {
+    if (!prompt.trim()) return alert("Enter a prompt");
     setLoadingScript(true);
-    setScript("");
-    setAudioUrl("");
 
     try {
       const res = await fetch(`${API}/generate`, {
@@ -25,13 +24,21 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          prompt,
-        }),
+        body: JSON.stringify({ prompt }),
       });
 
-      const data = await res.json();
-      if (data.script) setScript(data.script);
+      const text = await res.text();
+      console.log("GENERATE RAW:", text);
+
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { script: text };
+      }
+
+      setScript(data.script || "");
+      setAudioUrl("");
     } catch (err) {
       console.error(err);
       alert("Script generation failed");
@@ -50,9 +57,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          script,
-        }),
+        body: JSON.stringify({ script }),
       });
 
       const data = await res.json();
@@ -107,7 +112,7 @@ export default function Home() {
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="How to become successful"
-        style={{ width: 400, padding: 10 }}
+        style={{ width: 420, padding: 10 }}
       />
 
       <div style={{ marginTop: 20 }}>
