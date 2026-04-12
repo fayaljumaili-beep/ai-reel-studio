@@ -82,76 +82,38 @@ app.post("/voiceover", async (req, res) => {
 /* =========================
    GENERATE VIDEO WITH PEXELS
 ========================= */
-app.post("/generate-video", async (req, res) => {
+aapp.post("/generate-video", async (req, res) => {
   try {
     const { text } = req.body;
 
-    const searchTerm = text.split(" ").slice(0, 3).join(" ");
+    const outputPath = "viral-reel.mp4";
+    const audioPath = "voiceover.mp3";
 
-    const pexelsRes = await axios.get(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
-        searchTerm
-      )}&per_page=1`,
-      {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY,
-        },
-      }
-    );
-
-    const videoUrl =
-      pexelsRes.data.videos[0].video_files.find(
-        (v) => v.quality === "sd"
-      )?.link || pexelsRes.data.videos[0].video_files[0].link;
-
-    const videoPath = path.join(process.cwd(), "stock.mp4");
-    const writer = fs.createWriteStream(videoPath);
-
-    const videoStream = await axios({
-      method: "get",
-      url: videoUrl,
-      responseType: "stream",
-    });
-
-    videoStream.data.pipe(writer);
+    // your existing voice generation stays above this
 
     await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    const voice = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: text,
-    });
-
-    const audioPath = path.join(process.cwd(), "voice.mp3");
-    const audioBuffer = Buffer.from(await voice.arrayBuffer());
-    fs.writeFileSync(audioPath, audioBuffer);
-
-    const outputPath = path.join(process.cwd(), "viral-reel.mp4");
-
-    await new Promise((resolve, reject) => {
-      ffmpeg(videoPath)
+      ffmpeg()
+        .input("color=c=black:s=720x1280:d=8")
+        .inputFormat("lavfi")
         .input(audioPath)
         .videoCodec("libx264")
         .audioCodec("aac")
         .outputOptions([
-          "-preset ultrafast",
           "-pix_fmt yuv420p",
+          "-profile:v baseline",
+          "-level 3.0",
           "-movflags +faststart",
           "-shortest",
+          "-r 24"
         ])
-        .size("720x1280")
         .save(outputPath)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    res.download(outputPath);
+    return res.download(outputPath);
   } catch (error) {
-    console.error("VIDEO ERROR:", error);
+    console.error("FINAL VIDEO ERROR:", error);
     res.status(500).json({ error: "Video generation failed" });
   }
 });
