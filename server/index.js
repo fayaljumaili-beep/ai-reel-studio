@@ -84,43 +84,77 @@ app.post("/voiceover", async (req, res) => {
 ========================= */
 app.post("/generate-video", async (req, res) => {
   try {
-    const { text } = req.body;
+    const text = req.body.text || "success mindset";
 
-    const outputPath = "viral-reel.mp4";
-    const audioPath = "voiceover.mp3";
+    const pexels = await axios.get(
+      "https://api.pexels.com/videos/search",
+      {
+        headers: {
+          Authorization: process.env.PEXELS_API_KEY,
+        },
+        params: {
+          query: text,
+          per_page: 1,
+        },
+      }
+    );
 
-    // your existing voice generation stays above this
+    const clipUrl =
+      pexels.data.videos?.[0]?.video_files?.find(
+        (v) => v.quality === "sd"
+      )?.link;
 
-  await new Promise((resolve, reject) => {
-  ffmpeg()
-    .input("color=c=black:s=720x1280:d=8")
-    .inputFormat("lavfi")
-    .input(audioPath)
-    .videoCodec("libx264")
-    .audioCodec("aac")
-    .audioFrequency(44100)
-    .audioChannels(2)
-    .outputOptions([
-      "-pix_fmt yuv420p",
-      "-profile:v baseline",
-      "-level 3.0",
-      "-movflags +faststart",
-      "-shortest",
-      "-r 24",
-      "-b:a 128k"
-    ])
-    .save(outputPath)
-    .on("end", resolve)
-    .on("error", reject);
-});
+    if (!clipUrl) {
+      return res.status(500).json({ error: "No stock video found" });
+    }
+
+    const clipPath = path.join(process.cwd(), "stock.mp4");
+    const audioPath = path.join(process.cwd(), "voice.mp3");
+    const outputPath = path.join(process.cwd(), "viral-reel.mp4");
+
+    const clipResponse = await axios.get(clipUrl, {
+      responseType: "stream",
+    });
+
+    await new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(clipPath);
+      clipResponse.data.pipe(writer);
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+
+    const voice = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: text,
+    });
+
+    const voiceBuffer = Buffer.from(await voice.arrayBuffer());
+    fs.writeFileSync(audioPath, voiceBuffer);
+
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(clipPath)
+        .input(audioPath)
+        .videoCodec("libx264")
+        .audioCodec("aac")
+        .outputOptions([
+          "-vf scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
+          "-pix_fmt yuv420p",
+          "-movflags +faststart",
+          "-shortest",
+        ])
+        .save(outputPath)
+        .on("end", resolve)
+        .on("error", reject);
+    });
 
     return res.download(outputPath);
   } catch (error) {
-    console.error("FINAL VIDEO ERROR:", error);
-    res.status(500).json({ error: "Video generation failed" });
+    console.error("PEXELS VIDEO ERROR:", error);
+    return res.status(500).json({ error: "Video generation failed" });
   }
 });
-
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
