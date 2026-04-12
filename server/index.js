@@ -1,5 +1,14 @@
 import express from "express";
 
+    const script = req.body?.script || "";
+
+    if (!script.trim()) {
+      return res.status(400).json({
+        error: "Missing script input",
+        received: req.body,
+      });
+    }
+
     const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice: "alloy",
@@ -50,7 +59,9 @@ app.post("/generate-video", async (req, res) => {
       .videoCodec("libx264")
       .audioCodec("aac")
       .outputOptions([
-        "-vf drawtext=text='" + safeCaption + "':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-220",
+        "-vf drawtext=text='" +
+          safeCaption +
+          "':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-220",
         "-pix_fmt yuv420p",
         "-movflags +faststart",
         "-shortest",
