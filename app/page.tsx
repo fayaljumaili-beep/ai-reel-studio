@@ -32,25 +32,18 @@ export default function Page() {
   };
 
   const generateVoice = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API}/voiceover`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script }),
-      });
-
-      if (!res.ok) throw new Error("Voice generation failed");
-
-      const data = await res.json();
-      setVoiceUrl(data.voiceUrl || "");
-    } catch (error) {
-      console.error(error);
-      alert("Voice generation failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    setVoiceUrl(
+      "https://ai-reel-studio-frontend-agpd-e2a8bhir4.vercel.app/demo.mp3"
+    );
+  } catch (error) {
+    console.error(error);
+    alert("Voice generation failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const downloadReel = async () => {
     try {
