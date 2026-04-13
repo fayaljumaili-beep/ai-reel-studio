@@ -71,9 +71,18 @@ app.post("/voiceover", async (req, res) => {
 // 3) Generate final reel video
 app.post("/generate-video", async (req, res) => {
   try {
-    const { audioUrl, voiceUrl, audio, url } = req.body;
-    const finalAudioUrl = audioUrl || voiceUrl || audio || url;
+    const body = req.body || {};
 
+console.log("VIDEO BODY:", body);
+
+const finalAudioUrl =
+  body.audioUrl ||
+  body.voiceUrl ||
+  body.audio ||
+  body.url ||
+  body.voice ||
+  body.mp3;
+  
     if (!finalAudioUrl) {
       return res.status(400).send("Missing voice URL");
     }
