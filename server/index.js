@@ -70,22 +70,22 @@ app.post("/generate-video", async (req, res) => {
       .input("sample.mp4")
       .input("voice.mp3")
       .outputOptions([
-        "-map 0:v:0",
-        "-map 1:a:0",
-        "-vf scale=720:1280",
-        "-r 30",
-        "-c:v libx264",
-        "-profile:v main",
-        "-level 3.1",
-        "-pix_fmt yuv420p",
-        "-preset medium",
-        "-movflags +faststart",
-        "-c:a aac",
-        "-b:a 192k",
-        "-ar 44100",
-        "-ac 2",
-        "-shortest"
-      ])
+  "-map 0:v:0",
+  "-map 1:a:0",
+  "-vf scale=720:1280",
+  "-r 30",
+  "-c:v libx264",
+  "-profile:v main",
+  "-level 3.1",
+  "-pix_fmt yuv420p",
+  "-preset medium",
+  "-movflags +faststart",
+  "-c:a aac",
+  "-b:a 192k",
+  "-ar 44100",
+  "-ac 2",
+  "-shortest"
+])
       .on("end", () => {
         const videoBuffer = fs.readFileSync("viral-reel.mp4");
 
