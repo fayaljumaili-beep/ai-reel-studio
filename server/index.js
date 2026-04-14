@@ -1,4 +1,61 @@
 import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import ffmpeg from "fluent-ffmpeg";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.static("."));
+
+app.get("/", (_, res) => {
+  res.send("🚀 AI Reel backend running");
+});
+
+// 1) Generate script
+app.post("/generate-script", async (req, res) => {
+  try {
+    const prompt = req.body?.prompt || "Unlock Your Success!";
+
+    const script = `
+🎬 Viral Faceless Reel Script: "${prompt}"
+
+1. Hook (0–3s)
+Show an emotional opener related to the topic.
+
+2. Main Point (3–8s)
+Reveal the first powerful lesson.
+
+3. Value (8–15s)
+Show transformation, proof, or insight.
+
+4. CTA (15–20s)
+Ask users to follow for more.
+`;
+
+    res.json({ script });
+  } catch (error) {
+    console.error("SCRIPT ERROR:", error);
+    res.status(500).send("Script generation failed");
+  }
+});
+
+// 2) Voiceover route (serves stable MP3)
+app.post("/voiceover", async (_, res) => {
+  try {
+    const voiceUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || "https://your-domain.up.railway.app"}/voice.mp3`;
+    res.json({ voiceUrl });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Voice generation failed");
   }
 });
 
@@ -43,6 +100,7 @@ app.post("/generate-video", async (req, res) => {
       ])
       .on("end", () => {
         try {
+           try {
           const videoBuffer = fs.readFileSync(outputPath);
           res.setHeader("Content-Type", "video/mp4");
           res.setHeader(
