@@ -70,7 +70,7 @@ app.post("/generate-video", async (req, res) => {
       .outputOptions([
         "-map 0:v:0",
         "-map 1:a:0",
-        `-vf scale=720:1280,drawtext=text='${caption}':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=h-140`,
+        `-vf scale=720:1280",
         "-r 30",
         "-c:v libx264",
         "-profile:v main",
