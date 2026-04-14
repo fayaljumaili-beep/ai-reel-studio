@@ -16,16 +16,21 @@ export default function Page() {
 
       const res = await fetch(`${API}/generate-script`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ prompt }),
       });
 
-      if (!res.ok) throw new Error("Script generation failed");
+      if (!res.ok) {
+        throw new Error("Script generation failed");
+      }
 
       const data = await res.json();
       setScript(data.script || "");
+      setVoiceUrl(""); // reset old voice when new script generated
     } catch (error) {
-      console.error(error);
+      console.error("SCRIPT ERROR:", error);
       alert("Script generation failed");
     } finally {
       setLoading(false);
@@ -33,36 +38,34 @@ export default function Page() {
   };
 
   const generateVoice = async () => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const res = await fetch(`${API}/voiceover`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ script }),
-    });
+      const res = await fetch(`${API}/voiceover`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ script }),
+      });
 
-    console.log("VOICE STATUS:", res.status);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Voice generation failed");
+      }
 
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("VOICE ERROR:", text);
-      throw new Error(text);
+      const data = await res.json();
+      console.log("VOICE RESPONSE:", data);
+
+      // ✅ critical fix
+      setVoiceUrl(data.voiceUrl || "");
+    } catch (error) {
+      console.error("VOICE ERROR:", error);
+      alert("Voice generation failed");
+    } finally {
+      setLoading(false);
     }
-
-    const data = await res.json();
-    console.log("VOICE DATA:", data);
-
-    setVoiceUrl(data.voiceUrl || data.url || "");
-  } catch (error) {
-    console.error("VOICE FAILED:", error);
-    alert("Voice generation failed");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const downloadReel = async () => {
     try {
@@ -70,8 +73,12 @@ export default function Page() {
 
       const res = await fetch(`${API}/generate-video`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voiceUrl }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          voiceUrl,
+        }),
       });
 
       if (!res.ok) {
@@ -81,13 +88,15 @@ export default function Page() {
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
       a.download = "viral-reel.mp4";
       a.click();
+
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error(error);
+      console.error("VIDEO ERROR:", error);
       alert("Video generation failed");
     } finally {
       setLoading(false);
@@ -96,7 +105,10 @@ export default function Page() {
 
   return (
     <main className="p-8 space-y-6">
-      <h1 className="text-4xl font-bold">Faceless Reel Scripts in 5 Seconds</h1>
+      <h1 className="text-4xl font-bold">
+        Faceless Reel Scripts in 5 Seconds
+      </h1>
+
       <p>LIVE SAAS MODE 🚀</p>
 
       <input
@@ -137,6 +149,7 @@ export default function Page() {
         <pre className="whitespace-pre-wrap">{script}</pre>
       </section>
 
+      {/* ✅ audio player appears once voiceUrl is set */}
       {voiceUrl && (
         <section className="space-y-2">
           <h2 className="text-xl font-bold">Generated Voice</h2>
