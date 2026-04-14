@@ -52,7 +52,7 @@ app.post("/voiceover", async (_, res) => {
   try {
     const voiceUrl =
     "https://ai-reel-studio-frontend-production.up.railway.app/voice.mp3";
-    
+
     res.json({ voiceUrl });
   } catch (error) {
     console.error(error);
@@ -63,28 +63,29 @@ app.post("/voiceover", async (_, res) => {
 // 3) Generate final narrated video
 app.post("/generate-video", async (req, res) => {
   try {
-    const caption = req.body?.caption || "Unlock Your Success!";
+    const caption = req.body?.caption || "AI Reel";
+
+    const voiceUrl =
+      "https://ai-reel-studio-frontend-agpd-gheoye3pe.vercel.app/voice.mp3";
 
     ffmpeg()
       .input("sample.mp4")
       .input(voiceUrl)
       .outputOptions([
-  "-map 0:v:0",
-  "-map 1:a:0",
-  "-vf scale=720:1280",
-  "-r 30",
-  "-c:v libx264",
-  "-profile:v main",
-  "-level 3.1",
-  "-pix_fmt yuv420p",
-  "-preset medium",
-  "-movflags +faststart",
-  "-c:a aac",
-  "-b:a 192k",
-  "-ar 44100",
-  "-ac 2",
-  "-shortest"
-])
+        "-map 0:v:0",
+        "-map 1:a:0",
+        "-vf scale=720:1280",
+        "-r 30",
+        "-c:v libx264",
+        "-pix_fmt yuv420p",
+        "-preset medium",
+        "-movflags +faststart",
+        "-c:a aac",
+        "-b:a 192k",
+        "-ar 44100",
+        "-ac 2",
+        "-shortest"
+      ])
       .on("end", () => {
         const videoBuffer = fs.readFileSync("viral-reel.mp4");
 
