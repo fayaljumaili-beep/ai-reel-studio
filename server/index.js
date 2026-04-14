@@ -1,120 +1,54 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import ffmpeg from "fluent-ffmpeg";
-import fs from "fs";
-import path from "path";
-import OpenAI from "openai";
-
-dotenv.config();
-
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.static("."));
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-app.get("/", (_, res) => {
-  res.send("AI Reel backend running 🚀");
-});
-
-app.post("/generate-script", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "Write viral faceless reel scripts with hook, 5 scenes, CTA, and captions.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
-
-    const script = completion.choices[0].message.content;
-    res.json({ script });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Script generation failed");
   }
 });
 
-app.post("/voiceover", async (_, res) => {
-  try {
-    const voiceUrl =
-      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
-
-    res.json({ voiceUrl });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Voice generation failed");
-  }
-});
-
+// 3) Generate final narrated video
 app.post("/generate-video", async (req, res) => {
   try {
-    const body = req.body || {};
+    const caption = (req.body?.caption || "Unlock Your Success!")
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "\\'");
 
-    const finalAudioUrl =
-      body.audioUrl ||
-      body.voiceUrl ||
-      body.audio ||
-      body.url ||
-      body.voice ||
-      body.mp3;
+    const samplePath = path.join(__dirname, "..", "sample.mp4");
+    const voicePath = path.join(__dirname, "..", "voice.mp3");
+    const outputPath = path.join(__dirname, "..", "viral-reel.mp4");
 
-    if (!finalAudioUrl) {
-      return res.status(400).send("Missing audio URL");
+    if (!fs.existsSync(samplePath)) {
+      return res.status(400).send("sample.mp4 missing");
     }
 
-    const videoPath = path.join(process.cwd(), "sample.mp4");
-    const outputPath = path.join("/tmp", "viral-reel.mp4");
-
-    const audioPath = path.join("/tmp", "voice.mp3");
-
-const audioRes = await fetch(finalAudioUrl);
-const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-
-fs.writeFileSync(audioPath, audioBuffer);
+    if (!fs.existsSync(voicePath)) {
+      return res.status(400).send("voice.mp3 missing");
+    }
 
     ffmpeg()
-      .input(videoPath)
-      .input(audioPath)
+      .input(samplePath)
+      .input(voicePath)
       .outputOptions([
-  "-vf scale=720:1280",
-  "-r 30",
-  "-c:v libx264",
-  "-profile:v main",
-  "-level 3.1",
-  "-pix_fmt yuv420p",
-  "-preset medium",
-  "-movflags +faststart",
-  "-c:a aac",
-  "-b:a 192k",
-  "-ar 44100",
-  "-ac 2",
-  "-shortest"
-])
-      .save(outputPath)
+        "-map 0:v:0",
+        "-map 1:a:0",
+        `-vf scale=720:1280,drawtext=text='${caption}':fontcolor=white:fontsize=42:x=(w-text_w)/2:y=h-140`,
+        "-r 30",
+        "-c:v libx264",
+        "-profile:v main",
+        "-level 3.1",
+        "-pix_fmt yuv420p",
+        "-preset medium",
+        "-movflags +faststart",
+        "-c:a aac",
+        "-b:a 192k",
+        "-ar 44100",
+        "-ac 2",
+        "-shortest"
+      ])
       .on("end", () => {
         try {
           const videoBuffer = fs.readFileSync(outputPath);
-
           res.setHeader("Content-Type", "video/mp4");
           res.setHeader(
             "Content-Disposition",
-            "attachment; filename=viral-reel.mp4"
+            'attachment; filename="viral-reel.mp4"'
           );
-
           res.end(videoBuffer);
         } catch (error) {
           console.error("READ VIDEO ERROR:", error);
@@ -124,12 +58,14 @@ fs.writeFileSync(audioPath, audioBuffer);
       .on("error", (err) => {
         console.error("VIDEO ERROR:", err.message);
         res.status(400).send(err.message);
-      });
+      })
+      .save(outputPath);
   } catch (error) {
     console.error(error);
     res.status(500).send(error.message);
   }
 });
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
