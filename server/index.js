@@ -50,7 +50,10 @@ Ask users to follow for more.
 // 2) Voiceover route (serves stable MP3)
 app.post("/voiceover", async (_, res) => {
   try {
-    const voiceUrl = `${process.env.RAILWAY_PUBLIC_DOMAIN || "https://ai-reel-studio-frontend-production.up.railway.app/voice.mp3`;
+    const voiceUrl =
+  process.env.RAILWAY_PUBLIC_DOMAIN
+    ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN + "/voice.mp3"
+    : "https://ai-reel-studio-frontend-production.up.railway.app/voice.mp3";
     res.json({ voiceUrl });
   } catch (error) {
     console.error(error);
