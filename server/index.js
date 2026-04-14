@@ -68,7 +68,7 @@ app.post("/generate-video", async (req, res) => {
     const caption = req.body?.caption || "AI Reel";
 
     const host = req.get("host");
-    const protocol = host.includes("localhost") ? "http" : "https";
+    const protocol = req.headers["x-forwarded-proto"] || "https";
     const voiceUrl = `${protocol}://${host}/voice.mp3`;
 
     ffmpeg()
