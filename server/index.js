@@ -48,14 +48,16 @@ Ask users to follow for more.
 });
 
 // 2) Voiceover route (serves stable MP3)
-app.post("/voiceover", async (_, res) => {
+app.post("/voiceover", async (req, res) => {
   try {
-    const voiceUrl =
-    "https://" + process.env.ai-reel-studio-frontend-production.up.railway.app + "/voice.mp3";
+    const host = req.get("host");
+    const protocol = host.includes("localhost") ? "http" : "https";
+
+    const voiceUrl = `${protocol}://${host}/voice.mp3`;
 
     res.json({ voiceUrl });
   } catch (error) {
-    console.error(error);
+    console.error("VOICE ERROR:", error);
     res.status(500).send("Voice generation failed");
   }
 });
@@ -66,7 +68,9 @@ app.post("/generate-video", async (req, res) => {
     const caption = req.body?.caption || "AI Reel";
 
     const voiceUrl =
-      "https://" + process.env.ai_reel_studio_frontend_production_up_railway_app + "/voice.mp3";
+    const host = req.get("host");
+    const protocol = host.includes("localhost") ? "http" : "https";
+    const voiceUrl = `${protocol}://${host}/voice.mp3`; 
 
     ffmpeg()
       .input("sample.mp4")
