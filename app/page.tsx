@@ -59,7 +59,7 @@ export default function Page() {
   return (
     <main style={{ padding: "40px", fontFamily: "serif" }}>
       <h1 style={{ fontSize: "48px", fontWeight: "bold" }}>
-        Faceless Reel SaaS 🚀
+        Faceless Reel SaaS 🚀 v3
       </h1>
 
       <input
