@@ -6,7 +6,14 @@ import ffmpeg from "fluent-ffmpeg";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
+}));
+
+app.options("*", cors());
+
 app.use(express.json());
 
 app.post("/generate-video", async (req, res) => {
