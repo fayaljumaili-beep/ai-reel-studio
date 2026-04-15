@@ -115,14 +115,21 @@ export default function Page() {
       />
 
       <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
-        <button onClick={generateScript} disabled={isLoading}>
-          {isLoading ? "Generating..." : "Generate Premium Reel Script"}
-        </button>
+  <button onClick={generateScript}>
+    Generate Premium Reel Script
+  </button>
 
-        <button onClick={generateVoiceover}>Generate AI Voiceover</button>
+  <button onClick={generateVoiceover}>
+    Generate AI Voiceover
+  </button>
 
-        <button onClick={downloadNarratedReel}>Download Narrated Reel</button>
-      </div>
+  <button
+    type="button"
+    onClick={downloadNarratedReel}
+  >
+    Download Narrated Reel
+  </button>
+</div>
 
       <h2 style={{ marginTop: "40px" }}>Generated Output</h2>
       <pre style={{ whiteSpace: "pre-wrap" }}>{generatedScript}</pre>
