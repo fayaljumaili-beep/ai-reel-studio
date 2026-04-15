@@ -15,10 +15,6 @@ app.post("/generate-script", async (req, res) => {
   try {
     const { topic } = req.body;
 
-    if (!topic) {
-      return res.status(400).json({ error: "Topic is required" });
-    }
-
     const script = `🎬 Viral Faceless Reel Script: "${topic}"
 
 1. Hook (0–3s)
@@ -36,7 +32,7 @@ Ask users to follow for more.`;
     res.json({ script });
   } catch (error) {
     console.error("SCRIPT ERROR:", error);
-    res.status(500).json({ error: "Script generation failed" });
+    res.status(500).json({ error: "script generation failed" });
   }
 });
 
@@ -52,27 +48,11 @@ app.post("/voiceover", async (req, res) => {
 
     const voicePath = path.join(process.cwd(), "voice.mp3");
 
-    const response = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: script,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
-
-    fs.writeFileSync(voicePath, audioBuffer);
+    // TEMP demo voice file fallback
+    fs.copyFileSync(
+      path.join(process.cwd(), "voice.mp3"),
+      voicePath
+    );
 
     res.json({
       success: true,
@@ -86,13 +66,13 @@ app.post("/voiceover", async (req, res) => {
   }
 });
 
-app.post("/generate-video", async (req, res) => {
+app.get("/generate-video", async (req, res) => {
   try {
-    const samplePath = path.join(process.cwd(), "sample.mp4");
+    const sampleVideo = path.join(process.cwd(), "sample.mp4");
     const voicePath = path.join(process.cwd(), "voice.mp3");
     const outputPath = path.join(process.cwd(), "viral-reel.mp4");
 
-    if (!fs.existsSync(samplePath)) {
+    if (!fs.existsSync(sampleVideo)) {
       throw new Error("sample.mp4 missing");
     }
 
@@ -100,7 +80,7 @@ app.post("/generate-video", async (req, res) => {
       throw new Error("voice.mp3 missing");
     }
 
-    ffmpeg(samplePath)
+    ffmpeg(sampleVideo)
       .input(voicePath)
       .outputOptions([
         "-map 0:v:0",
