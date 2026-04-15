@@ -64,31 +64,37 @@ export default function Page() {
   };
 
   const downloadNarratedReel = async () => {
-    try {
-      const res = await fetch(`${API_URL}/generate-video`, {
-        method: "GET",
-      });
-
-      if (!res.ok) {
-        throw new Error("Video generation failed");
+  try {
+    const response = await fetch(
+      "https://ai-reel-studio-frontend-production.up.railway.app/generate-video",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          script: generatedScript,
+        }),
       }
+    );
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "viral-reel.mp4";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      alert("Video generation failed");
+    if (!response.ok) {
+      throw new Error("Video generation failed");
     }
-  };
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "viral-reel.mp4";
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    alert("Video generation failed");
+  }
+};
 
   return (
     <main style={{ padding: "40px", fontFamily: "serif" }}>
