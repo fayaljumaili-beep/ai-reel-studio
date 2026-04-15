@@ -42,16 +42,15 @@ Ask users to follow for more.`;
 
 app.post("/voiceover", async (req, res) => {
   try {
-    const { script } = req.body;
+    const script = req.body?.script;
 
     if (!script) {
-      return res.status(400).json({ error: "Script is required" });
+      return res.status(400).json({
+        error: "script missing in request body",
+      });
     }
 
     const voicePath = path.join(process.cwd(), "voice.mp3");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -64,21 +63,14 @@ app.post("/voiceover", async (req, res) => {
         voice: "alloy",
         input: script,
       }),
-      signal: controller.signal,
     });
-
-    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`TTS failed ${response.status}: ${errorText}`);
+      throw new Error(errorText);
     }
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
-
-    if (!audioBuffer.length) {
-      throw new Error("Generated MP3 is empty");
-    }
 
     fs.writeFileSync(voicePath, audioBuffer);
 
@@ -89,7 +81,7 @@ app.post("/voiceover", async (req, res) => {
   } catch (error) {
     console.error("VOICEOVER ERROR:", error);
     res.status(500).json({
-      error: error.message || "Voice generation failed",
+      error: error.message,
     });
   }
 });
