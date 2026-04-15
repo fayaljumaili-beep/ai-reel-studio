@@ -66,38 +66,42 @@ app.post("/voiceover", async (req, res) => {
   }
 });
 
-app.get("/generate-video", async (req, res) => {
+app.post("/generate-video", async (req, res) => {
   try {
-    const sampleVideo = path.join(process.cwd(), "sample.mp4");
-    const voicePath = path.join(process.cwd(), "voice.mp3");
+    const script = req.body?.script || "";
+    if (!script) {
+      return res.status(400).send("Missing script");
+    }
+
     const outputPath = path.join(process.cwd(), "viral-reel.mp4");
+    const imagePath = path.join(process.cwd(), "sample.mp4");
+    const audioPath = path.join(process.cwd(), "voice.mp3");
 
-    if (!fs.existsSync(sampleVideo)) {
-      throw new Error("sample.mp4 missing");
+    if (!fs.existsSync(imagePath)) {
+      return res.status(500).send("sample.mp4 missing");
     }
 
-    if (!fs.existsSync(voicePath)) {
-      throw new Error("voice.mp3 missing");
+    if (!fs.existsSync(audioPath)) {
+      return res.status(500).send("voice.mp3 missing");
     }
 
-    ffmpeg(sampleVideo)
-      .input(voicePath)
+    ffmpeg()
+      .input(imagePath)
+      .input(audioPath)
       .outputOptions([
-        "-map 0:v:0",
-        "-map 1:a:0",
-        "-c:v copy",
+        "-c:v libx264",
         "-c:a aac",
         "-shortest",
+        "-pix_fmt yuv420p"
       ])
       .save(outputPath)
       .on("end", () => {
+        const videoBuffer = fs.readFileSync(outputPath);
         res.setHeader("Content-Type", "video/mp4");
         res.setHeader(
           "Content-Disposition",
           'attachment; filename="viral-reel.mp4"'
         );
-
-        const videoBuffer = fs.readFileSync(outputPath);
         res.end(videoBuffer);
       })
       .on("error", (err) => {
