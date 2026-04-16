@@ -92,3 +92,5 @@ export default function FacelessReelSaaS() {
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
             <h3 className="text-2xl font-bold">💳 Credits & Billing</h3>
             <p className="mt-3 text-zinc-400">120 credits remaining • Stripe-powered subscriptions • auto top-up.</p>
+            </p>
+</div>
