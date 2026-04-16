@@ -56,15 +56,16 @@ app.post("/generate-video", async (req, res) => {
     ffmpeg()
       .input("./sample.mp4")
       .input("./voice-output.mp3")
-      .outputOptions("-c:v copy")
       .outputOptions([
-  "-preset ultrafast",
-  "-crf 32",
-  "-movflags frag_keyframe+empty_moov",
-  "-pix_fmt yuv420p",
-  "-shortest"
-])
-
+        "-c:v copy",
+        "-preset ultrafast",
+        "-crf 32",
+        "-movflags frag_keyframe+empty_moov",
+        "-pix_fmt yuv420p",
+        "-shortest"
+      ])
+      .save(outputPath)
+      .on("end", () => {
         const videoBuffer = fs.readFileSync(outputPath);
 
         res.setHeader("Content-Type", "video/mp4");
@@ -79,8 +80,9 @@ app.post("/generate-video", async (req, res) => {
         console.error("VIDEO ERROR:", err);
         res.status(500).send("Video generation failed");
       });
+
   } catch (error) {
-    console.error("ROUTE ERROR:", error);
+    console.error("TRY ERROR:", error.message);
     res.status(500).send("Video generation failed");
   }
 });
