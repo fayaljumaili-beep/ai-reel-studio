@@ -82,7 +82,7 @@ app.post("/generate-video", async (req, res) => {
       });
 
   } catch (error) {
-    console.error("TRY ERROR:", error.message);
+
     res.status(500).send("Video generation failed");
   }
 });
