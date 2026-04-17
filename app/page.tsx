@@ -53,14 +53,17 @@ export default function Home() {
             {script}
           </div>
 
-          <button
-            onClick={generateVoice}
-            className="bg-blue-600 text-white px-4 py-2 rounded"
-          >
-            Generate Voice
-          </button>
-        </>
-      )}
+         <button
+  onClick={handleGenerateVoice}
+  className="bg-purple-600 text-white px-4 py-2 rounded-lg mt-4"
+>
+  🎤 Generate Voiceover
+</button>
+<button
+  className="bg-black text-white px-4 py-2 rounded-lg mt-4"
+>
+  🎬 Generate Narrated Reel
+</button>
 
       {audioUrl && (
         <audio controls src={audioUrl} className="w-full" />
@@ -68,3 +71,8 @@ export default function Home() {
     </main>
   )
 }
+<main className="flex flex-col items-center justify-center min-h-screen gap-4 p-6">
+  <h1 className="text-3xl font-bold">AI Reel Generator</h1>
+  
+  {/* your inputs + buttons here */}
+</main>
