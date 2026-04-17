@@ -64,6 +64,7 @@ export default function PremiumDashboard() {
                 <button className="rounded-2xl bg-zinc-800 px-4 py-4 font-semibold transition hover:bg-zinc-700">
                   Generate AI Voiceover
                 </button>
+       
                 <button className="rounded-2xl bg-emerald-500 px-4 py-4 font-semibold text-black transition hover:scale-[1.02]">
                   Download Narrated Reel
                 </button>
