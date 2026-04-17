@@ -1,3 +1,5 @@
+"use client";
+
 export default function PremiumDashboard() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white px-6 py-10">
@@ -31,8 +33,11 @@ export default function PremiumDashboard() {
               />
 
               <div className="grid gap-3 md:grid-cols-3">
-                <button className="rounded-2xl bg-white px-4 py-4 font-semibold text-black transition hover:scale-[1.02]">
-                  Generate Premium Script
+               <button
+                 className="rounded-2xl bg-white px-4 py-4 font-semibold"
+                 onClick={() => alert("it works")}
+                 >
+                 Generate Premium Script
                 </button>
                 <button className="rounded-2xl bg-zinc-800 px-4 py-4 font-semibold transition hover:bg-zinc-700">
                   Generate AI Voiceover
