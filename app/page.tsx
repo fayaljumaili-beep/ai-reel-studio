@@ -37,7 +37,7 @@ export default function Home() {
     try {
       setLoading(true);
 
-      const res = await fetch(`${BASE_URL}/voiceover`, {
+      const res = await fetch("/api/generate-voice", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
