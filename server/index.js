@@ -1,147 +1,142 @@
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import path from "path";
-import ffmpeg from "fluent-ffmpeg";
+require("dotenv").config({
+  path: require("path").resolve(__dirname, ".env"),
+});
 
+const OpenAI = require("openai").default;
+const path = require("path");
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
+const fs = require("fs");
+const ffmpeg = require("fluent-ffmpeg");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const express = require("express");
+const cors = require("cors");
 const app = express();
-const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true
+  })
+);
+
+app.options("*", cors());
+
 app.use(express.json());
 
-// Serve static files (VERY IMPORTANT for audio/video access)
-app.use(express.static(process.cwd()));
+function createVideo(audioPath, videoPath, captionText) {
+  const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
 
-/**
- * 🎬 1. GENERATE SCRIPT
- */
-app.post("/generate-script", async (req, res) => {
-  try {
-    const { topic } = req.body;
-
-    if (!topic) {
-      return res.status(400).json({ error: "Missing topic" });
-    }
-
-    const script = `🎬 Viral Faceless Reel Script: "${topic}"
-
-1. Hook (0–3s)
-Start with a bold or emotional statement.
-
-2. Main Point (3–8s)
-Deliver the core idea clearly.
-
-3. Value (8–15s)
-Give insight, transformation, or lesson.
-
-4. CTA (15–20s)
-Tell viewers to follow for more.`;
-
-    res.json({ script });
-  } catch (err) {
-    console.error("SCRIPT ERROR:", err);
-    res.status(500).json({ error: "Script generation failed" });
-  }
-});
-
-/**
- * 🔊 2. GENERATE VOICEOVER (Mock for now)
- */
-app.post("/voiceover", async (req, res) => {
-  try {
-    const { script } = req.body;
-
-    if (!script) {
-      return res.status(400).json({ error: "Missing script" });
-    }
-
-    const inputPath = path.join(process.cwd(), "voice.mp3");
-    const outputPath = path.join(process.cwd(), "voice-output.mp3");
-
-    if (!fs.existsSync(inputPath)) {
-      return res.status(500).json({
-        error: "voice.mp3 not found in server folder",
-      });
-    }
-
-    // Copy mock voice file
-    fs.copyFileSync(inputPath, outputPath);
-
-    // Return accessible URL
-    res.json({
-      audioUrl: "/voice-output.mp3",
-    });
-  } catch (error) {
-    console.error("VOICEOVER ERROR:", error);
-    res.status(500).json({ error: "Voiceover failed" });
-  }
-});
-
-/**
- * 🎥 3. GENERATE VIDEO
- */
-app.post("/generate-video", async (req, res) => {
-  try {
-    const videoPath = path.join(process.cwd(), "sample.mp4");
-    const audioPath = path.join(process.cwd(), "voice-output.mp3");
-    const outputPath = path.join(process.cwd(), "viral-reel.mp4");
-
-    // Validate files exist
-    if (!fs.existsSync(videoPath)) {
-      return res.status(500).json({
-        error: "sample.mp4 missing in server folder",
-      });
-    }
-
-    if (!fs.existsSync(audioPath)) {
-      return res.status(500).json({
-        error: "voice-output.mp3 missing — generate voice first",
-      });
-    }
-
+  return new Promise((resolve, reject) => {
     ffmpeg()
       .input(videoPath)
       .input(audioPath)
       .outputOptions([
-        "-c:v copy",
-        "-preset ultrafast",
-        "-crf 32",
-        "-movflags frag_keyframe+empty_moov",
-        "-pix_fmt yuv420p",
+        "-map 0:v",
+        "-map 1:a",
         "-shortest",
+        "-y"
       ])
-      .save(outputPath)
-      .on("end", () => {
-        const videoBuffer = fs.readFileSync(outputPath);
-
-        res.setHeader("Content-Type", "video/mp4");
-        res.setHeader(
-          "Content-Disposition",
-          'attachment; filename="viral-reel.mp4"'
-        );
-
-        res.end(videoBuffer);
-      })
+      .videoCodec("libx264")
+      .audioCodec("aac")
+      .output(outputPath)
+      .on("end", () => resolve(outputPath))
       .on("error", (err) => {
-        console.error("VIDEO ERROR:", err);
-        res.status(500).json({ error: "Video generation failed" });
-      });
+        console.log("FFMPEG ERROR:", err.message);
+        reject(err);
+      })
+      .run();
+  });
+}
+
+app.post("/generate", async (req, res) => {
+  try {
+    console.log("STEP 1: request received");
+
+    const { topic } = req.body;
+    const lowerTopic = topic.toLowerCase();
+
+    let voiceId = "qSeXEcewz7tA0Q0qk9fH";
+
+    if (lowerTopic.includes("love")) {
+      voiceId = "EXAVITQu4vr4xnSDxMaL";
+    } else if (
+      lowerTopic.includes("gym") ||
+      lowerTopic.includes("business")
+    ) {
+      voiceId = "TxGEqnHWrfWFTfGW9XjX";
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: `Write a short viral faceless reel script about ${topic}. Keep it powerful and motivational.`,
+        },
+      ],
+    });
+
+    console.log("STEP 2: script generated");
+
+    const script =
+      completion.choices[0].message.content ||
+      `Stay focused on ${topic} and never give up.`;
+
+    const response = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        text: script,
+        model_id: "eleven_multilingual_v2",
+      },
+      {
+        headers: {
+          "xi-api-key": process.env.API_KEY,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        responseType: "arraybuffer",
+      }
+    );
+
+    console.log("STEP 3: audio generated");
+
+    const audioPath = path.join(__dirname, "output.mp3");
+    fs.writeFileSync(audioPath, response.data);
+
+    let selectedVideo = "bg.mp4";
+
+    if (lowerTopic.includes("money")) {
+      selectedVideo = "mindset.mp4";
+    } else if (lowerTopic.includes("gym")) {
+      selectedVideo = "gym.mp4";
+    } else if (lowerTopic.includes("love")) {
+      selectedVideo = "love.mp4";
+    } else if (lowerTopic.includes("business")) {
+      selectedVideo = "business.mp4";
+    }
+
+    const videoPath = path.join(__dirname, "assets", selectedVideo);
+
+    const outputPath = await createVideo(audioPath, videoPath, script);
+
+    console.log("STEP 4: video created");
+
+    res.download(outputPath);
   } catch (error) {
-    console.error("VIDEO CRASH:", error);
-    res.status(500).json({ error: "Video generation failed" });
+    console.error("FULL ERROR:", error.message);
+    res.status(500).json({
+      error: "Video generation failed",
+      details: error.message,
+    });
   }
 });
 
-/**
- * 🚀 HEALTH CHECK (optional but useful)
- */
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(5000, () => {
+  console.log("Backend running on http://localhost:5000");
 });
