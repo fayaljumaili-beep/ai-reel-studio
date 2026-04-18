@@ -73,7 +73,7 @@ export default function Home() {
     try {
       if (!audioUrl) throw new Error("No audio yet");
 
-      const res = await fetch("/api/generate-video", {
+      const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
