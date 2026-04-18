@@ -1,138 +1,54 @@
-require("dotenv").config({
+require("dotenv").config();
 
 const OpenAI = require("openai");
-const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
+const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 const app = express();
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true
-  })
-);
-
-app.options("*", cors());
-
+app.use(cors());
 app.use(express.json());
 
-function createVideo(audioPath, videoPath, captionText) {
-  const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
+// health check (important for Railway)
+app.get("/", (req, res) => {
+  res.send("Server running ✅");
+});
 
-  return new Promise((resolve, reject) => {
-    ffmpeg()
-      .input(videoPath)
-      .input(audioPath)
-      .outputOptions([
-        "-map 0:v",
-        "-map 1:a",
-        "-shortest",
-        "-y"
-      ])
-      .videoCodec("libx264")
-      .audioCodec("aac")
-      .output(outputPath)
-      .on("end", () => resolve(outputPath))
-      .on("error", (err) => {
-        console.log("FFMPEG ERROR:", err.message);
-        reject(err);
-      })
-      .run();
-  });
-}
+// --- TEST ROUTE (so we know backend works)
+app.get("/test", (req, res) => {
+  res.json({ message: "Backend is alive 🚀" });
+});
 
-app.post("/generate", async (req, res) => {
+// --- VIDEO GENERATION PLACEHOLDER
+app.post("/generate-video", async (req, res) => {
   try {
-    console.log("STEP 1: request received");
+    const { script } = req.body;
 
-    const { topic } = req.body;
-    const lowerTopic = topic.toLowerCase();
-
-    let voiceId = "qSeXEcewz7tA0Q0qk9fH";
-
-    if (lowerTopic.includes("love")) {
-      voiceId = "EXAVITQu4vr4xnSDxMaL";
-    } else if (
-      lowerTopic.includes("gym") ||
-      lowerTopic.includes("business")
-    ) {
-      voiceId = "TxGEqnHWrfWFTfGW9XjX";
+    if (!script) {
+      return res.status(400).json({ error: "Missing script" });
     }
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: `Write a short viral faceless reel script about ${topic}. Keep it powerful and motivational.`,
-        },
-      ],
+    // For now just simulate success
+    // (we’ll plug real ffmpeg later)
+    const fakeUrl = "https://www.w3schools.com/html/mov_bbb.mp4";
+
+    return res.json({
+      success: true,
+      videoUrl: fakeUrl,
     });
-
-    console.log("STEP 2: script generated");
-
-    const script =
-      completion.choices[0].message.content ||
-      `Stay focused on ${topic} and never give up.`;
-
-    const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        text: script,
-        model_id: "eleven_multilingual_v2",
-      },
-      {
-        headers: {
-          "xi-api-key": process.env.API_KEY,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
-        },
-        responseType: "arraybuffer",
-      }
-    );
-
-    console.log("STEP 3: audio generated");
-
-    const audioPath = path.join(__dirname, "output.mp3");
-    fs.writeFileSync(audioPath, response.data);
-
-    let selectedVideo = "bg.mp4";
-
-    if (lowerTopic.includes("money")) {
-      selectedVideo = "mindset.mp4";
-    } else if (lowerTopic.includes("gym")) {
-      selectedVideo = "gym.mp4";
-    } else if (lowerTopic.includes("love")) {
-      selectedVideo = "love.mp4";
-    } else if (lowerTopic.includes("business")) {
-      selectedVideo = "business.mp4";
-    }
-
-    const videoPath = path.join(__dirname, "assets", selectedVideo);
-
-    const outputPath = await createVideo(audioPath, videoPath, script);
-
-    console.log("STEP 4: video created");
-
-    res.download(outputPath);
-  } catch (error) {
-    console.error("FULL ERROR:", error.message);
-    res.status(500).json({
-      error: "Video generation failed",
-      details: error.message,
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Video generation failed" });
   }
 });
 
-app.listen(5000, () => {
-  console.log("Backend running on http://localhost:5000");
+// --- START SERVER
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
