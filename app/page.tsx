@@ -14,7 +14,7 @@ export default function Home() {
     try {
       setLoading(true);
 
-      const res = await fetch(`${BASE_URL}/generate-script`, {
+      const res = await fetch("/api/generate-script", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
