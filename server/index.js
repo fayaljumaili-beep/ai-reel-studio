@@ -9,17 +9,21 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 
-// ✅ CORS FIX (important)
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-}));
+// 🔥 HARD FIX FOR CORS (THIS is what you were missing)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
 
 app.use(express.json());
-app.options("*", cors());
 
-// 🎬 VIDEO GENERATION ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
     const { script } = req.body;
@@ -28,8 +32,14 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "No script provided" });
     }
 
-    const audioPath = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+    const audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+
+    const audioPath = path.join(__dirname, "audio.mp3");
     const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
+
+    const response = await fetch(audioUrl);
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(audioPath, Buffer.from(buffer));
 
     ffmpeg()
       .input(audioPath)
@@ -38,19 +48,12 @@ app.post("/generate-video", async (req, res) => {
       .videoCodec("libx264")
       .audioCodec("aac")
       .duration(10)
-      .outputOptions([
-        "-pix_fmt yuv420p",
-        "-shortest"
-      ])
+      .outputOptions(["-pix_fmt yuv420p", "-shortest"])
       .save(outputPath)
       .on("end", () => {
         res.json({
           videoUrl: `https://ai-reel-studio-production.up.railway.app/${path.basename(outputPath)}`
         });
-      })
-      .on("error", (err) => {
-        console.error(err);
-        res.status(500).json({ error: "FFmpeg failed" });
       });
 
   } catch (err) {
@@ -59,7 +62,6 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// serve files (so video URL works)
 app.use(express.static(__dirname));
 
 app.listen(3000, () => console.log("Server running"));
