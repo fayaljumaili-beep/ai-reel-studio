@@ -42,7 +42,7 @@ app.post("/generate-video", async (req, res) => {
       .save(outputPath)
       .on("end", () => {
         res.json({
-          videoUrl: `https://https://ai-reel-studio-production.up.railway.app//${path.basename(outputPath)}`
+          videoUrl: `https://ai-reel-studio-production.up.railway.app//${path.basename(outputPath)}`
         });
       });
 
