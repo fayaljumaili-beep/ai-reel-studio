@@ -33,34 +33,36 @@ export default function Home() {
   };
 
   // 2️⃣ GENERATE VOICE
-  const handleVoice = async () => {
-    try {
-      setLoading(true);
+ const handleVoice = async () => {
+  try {
+    setLoading(true);
 
-      const res = await fetch("/api/generate-voice", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ script }),
-      });
+    const res = await fetch("/api/generate-voice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ script }),
+    });
 
-      const data = await res.json();
+    if (!res.ok) throw new Error("Request failed");
 
-      if (!data.audioUrl) throw new Error("No audio");
+    const blob = await res.blob();
 
-      // download audio
-      const link = document.createElement("a");
-      link.href = `${BASE_URL}${data.audioUrl}`;
-      link.download = "voice.mp3";
-      link.click();
-    } catch (err) {
-      console.error(err);
-      alert("Voice failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "voice.mp3";
+    link.click();
+
+  } catch (err) {
+    console.error(err);
+    alert("Voice failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // 3️⃣ GENERATE VIDEO
   const handleVideo = async () => {
