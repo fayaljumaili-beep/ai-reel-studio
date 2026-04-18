@@ -3,14 +3,12 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [topic, setTopic] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [script, setScript] = useState("");
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
 
-  const BASE_URL = "https://ai-reel-studio-frontend-production.up.railway.app/";
-
-  // 1️⃣ GENERATE SCRIPT
+  // 🎯 GENERATE SCRIPT
   const handleScript = async () => {
     try {
       setLoading(true);
@@ -20,7 +18,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify({ prompt }),
       });
 
       const data = await res.json();
@@ -33,92 +31,112 @@ export default function Home() {
     }
   };
 
-  // 2️⃣ GENERATE VOICE
- const handleVoice = async () => {
-  try {
-    setLoading(true);
+  // 🔊 GENERATE VOICE
+  const handleVoice = async () => {
+    try {
+      setLoading(true);
 
-    const res = await fetch("/api/generate-voice", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ script }),
-    });
+      const res = await fetch("/api/generate-voice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ script }),
+      });
 
-    const url = URL.createObjectURL(await res.blob());
-setAudioUrl(url);
+      if (!res.ok) throw new Error("Voice failed");
 
-    if (!res.ok) throw new Error("Request failed");
+      const blob = await res.blob(); // ✅ FIXED
+      const url = URL.createObjectURL(blob);
 
-    const blob = await res.blob();
+      setAudioUrl(url);
 
-    const url = URL.createObjectURL(blob);
+      // ▶️ play audio
+      const audio = new Audio(url);
+      audio.play();
 
-    const audio = new Audio(url);
-audio.play();
+      // ⬇️ download audio
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "voice.mp3";
+      link.click();
+    } catch (err) {
+      console.error(err);
+      alert("Voice failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const link = document.createElement("a");
-link.href = url;
-link.download = "voice.mp3";
-link.click();
-
-  } catch (err) {
-    console.error(err);
-    alert("Voice failed");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // 3️⃣ GENERATE VIDEO
+  // 🎬 GENERATE VIDEO (next step backend)
   const handleVideo = async () => {
-  try {
-    const res = await fetch("/api/generate-video", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ audioUrl }),
-    });
+    try {
+      if (!audioUrl) throw new Error("No audio yet");
 
-    const data = await res.json();
+      const res = await fetch("/api/generate-video", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ audioUrl }),
+      });
 
-    if (!data.videoUrl) throw new Error("No video");
+      const data = await res.json();
 
-    window.open(data.videoUrl);
-  } catch (err) {
-    console.error(err);
-    alert("Video failed");
-  }
-};
+      if (!data.videoUrl) throw new Error("No video");
+
+      window.open(data.videoUrl);
+    } catch (err) {
+      console.error(err);
+      alert("Video failed");
+    }
+  };
 
   return (
-    <main style={{ padding: 40, maxWidth: 600, margin: "auto" }}>
+    <main style={{ padding: 40, fontFamily: "sans-serif" }}>
       <h1>🎬 AI Reel Generator</h1>
 
       <input
-        value={topic}
-        onChange={(e) => setTopic(e.target.value)}
-        placeholder="Enter topic..."
-        style={{ width: "100%", padding: 10, marginBottom: 10 }}
+        placeholder="Enter your idea..."
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        style={{
+          width: "100%",
+          padding: 10,
+          marginTop: 20,
+          marginBottom: 20,
+        }}
       />
 
-      <button onClick={handleScript}>
-        {loading ? "Loading..." : "✨ Generate Script"}
-      </button>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={handleScript}>
+          ✨ Generate Script
+        </button>
 
-     <button onClick={handleVideo}>
-  🎬 Generate Video
-</button>
+        <button onClick={handleVoice}>
+          🔊 Generate Voice
+        </button>
 
-      <button onClick={handleVideo} style={{ marginLeft: 10 }}>
-        🎬 Download Video
-      </button>
+        <button onClick={handleVideo}>
+          🎬 Generate Video
+        </button>
+      </div>
 
-      <pre style={{ marginTop: 20, whiteSpace: "pre-wrap" }}>
-        {script}
-      </pre>
+      {loading && <p>Loading...</p>}
+
+      {script && (
+        <pre
+          style={{
+            marginTop: 20,
+            whiteSpace: "pre-wrap",
+            background: "#111",
+            color: "#fff",
+            padding: 20,
+          }}
+        >
+          {script}
+        </pre>
+      )}
     </main>
   );
 }
