@@ -70,30 +70,40 @@ export default function Home() {
 
   // 🎬 GENERATE VIDEO (next step backend)
   const handleVideo = async () => {
-    try {
-      if (!audioUrl) throw new Error("No audio yet");
+  try {
+    setLoading(true);
 
     const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    script: prompt, // ✅ THIS is the key fix
-  }),
-});
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ script }),
+    });
 
-const data = await res.json();
-
-if (!data.videoUrl) throw new Error("No video");
-
-window.open(data.videoUrl);
-    } catch (err) {
-      console.error(err);
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Backend error:", text);
       alert("Video failed");
+      return;
     }
-  };
 
+    const data = await res.json();
+
+    if (!data.videoUrl) {
+      alert("No video URL returned");
+      return;
+    }
+
+    window.open(data.videoUrl, "_blank");
+
+  } catch (err) {
+    console.error(err);
+    alert("Video failed");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <main style={{ padding: 40, fontFamily: "sans-serif" }}>
       <h1>🎬 AI Reel Generator</h1>
