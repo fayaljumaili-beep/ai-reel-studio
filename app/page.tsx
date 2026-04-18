@@ -78,7 +78,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ audioUrl }),
+        body: JSON.stringify({ script }),
       });
 
       const data = await res.json();
