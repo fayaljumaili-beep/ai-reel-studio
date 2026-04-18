@@ -4,7 +4,6 @@ const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
-const fetch = require("node-fetch");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -29,17 +28,9 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "No script provided" });
     }
 
-    const audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
-
-    const audioPath = path.join(__dirname, "audio.mp3");
+    const audioPath = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
     const outputPath = path.join(__dirname, `output-${Date.now()}.mp4`);
 
-    // 🔽 download audio
-    const response = await fetch(audioUrl);
-    const buffer = await response.arrayBuffer();
-    fs.writeFileSync(audioPath, Buffer.from(buffer));
-
-    // 🎬 create video
     ffmpeg()
       .input(audioPath)
       .inputOptions(["-loop 1"])
@@ -58,7 +49,7 @@ app.post("/generate-video", async (req, res) => {
         });
       })
       .on("error", (err) => {
-        console.error("FFmpeg error:", err);
+        console.error(err);
         res.status(500).json({ error: "FFmpeg failed" });
       });
 
