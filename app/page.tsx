@@ -73,19 +73,21 @@ export default function Home() {
     try {
       if (!audioUrl) throw new Error("No audio yet");
 
-      const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ script }),
-      });
+    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    script: prompt, // ✅ THIS is the key fix
+  }),
+});
 
-      const data = await res.json();
+const data = await res.json();
 
-      if (!data.videoUrl) throw new Error("No video");
+if (!data.videoUrl) throw new Error("No video");
 
-      window.open(data.videoUrl);
+window.open(data.videoUrl);
     } catch (err) {
       console.error(err);
       alert("Video failed");
