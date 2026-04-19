@@ -25,15 +25,15 @@ app.get("/", (req, res) => {
 });
 
 // 🔥 MAIN ROUTE (MATCH THIS IN HOPPSCOTCH)
-app.post("/generate", async (req, res) => {
-  try {
-    const { script } = req.body;
+app.post("/generate", (req, res) => {
+  console.log("==== HIT /generate ====");
+  console.log("Body:", req.body);
 
-    console.log("Incoming body:", req.body);
-
-    if (!script) {
-      return res.status(400).json({ error: "No script provided" });
-    }
+  return res.json({
+    message: "Route works ✅",
+    received: req.body
+  });
+});
 
     // ✅ FIXED FILE PATHS
     const audioPath = path.join(__dirname, "voice.mp3"); // ✅ MUST be mp3
