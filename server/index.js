@@ -53,38 +53,34 @@ app.post("/generate", (req, res) => {
 
     let responded = false;
 
-    ffmpeg()
-      .input(imagePath)
-      .inputOptions(["-loop 1"])
-      .input(audioPath)
-      .videoCodec("libx264")
-      .audioCodec("aac")
-      .duration(10)
-      .outputOptions(["-pix_fmt yuv420p", "-shortest"])
+ffmpeg()
+  .input(imagePath)
+  .inputOptions(["-loop 1"])
+  .input(audioPath)
+  .videoCodec("libx264")
+  .audioCodec("aac")
+  .duration(10)
+  .outputOptions(["-pix_fmt yuv420p", "-shortest"])
 
-      .on("start", (cmd) => {
-        console.log("FFmpeg started:", cmd);
-      })
+  .on("error", (err) => {
+    console.error("FFmpeg error:", err);
+    if (!responded) {
+      responded = true;
+      res.status(500).json({ error: "FFmpeg failed" });
+    }
+  })
 
-      .on("error", (err) => {
-        console.error("FFmpeg error:", err);
-        if (!responded) {
-          responded = true;
-          return res.status(500).json({ error: "FFmpeg failed", details: err.message });
-        }
-      })
+  .on("end", () => {
+    console.log("Video created:", outputPath);
+    if (!responded) {
+      responded = true;
+      res.json({
+        videoUrl: `https://ai-reel-studio-production.up.railway.app/${path.basename(outputPath)}`
+      });
+    }
+  })
 
-      .on("end", () => {
-        console.log("Video created:", outputPath);
-        if (!responded) {
-          responded = true;
-          return res.json({
-            videoUrl: `https://ai-reel-studio-production.up.railway.app/${path.basename(outputPath)}`
-          });
-        }
-      })
-
-      .save(outputPath);
+  .save(outputPath);
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
