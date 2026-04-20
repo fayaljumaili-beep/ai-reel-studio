@@ -88,36 +88,40 @@ console.log("Voice generated");
     let responded = false;
 
     // 🎬 Create video
- ffmpeg()
+ffmpeg()
   .input(imagePath)
+  .inputOptions(["-loop 1"])
   .input(audioPath)
+
   .videoCodec("libx264")
   .audioCodec("aac")
+
+  // ❌ REMOVE .duration(10)
+
   .outputOptions([
-    "-preset ultrafast",     // ⚡ reduces CPU usage
-    "-tune stillimage",      // 🖼 optimized for images
     "-pix_fmt yuv420p",
-    "-shortest"
+    "-shortest",
+    "-movflags +faststart"
   ])
-  .on("start", cmd => console.log("FFmpeg:", cmd))
+
   .on("error", (err) => {
-    console.error("FFmpeg error FULL:", err.message);
+    console.error("FFmpeg error:", err);
     if (!responded) {
       responded = true;
-      return res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "FFmpeg failed" });
     }
   })
+
   .on("end", () => {
     console.log("Video created:", outputPath);
     if (!responded) {
       responded = true;
-
-      const videoUrl = `https://ai-reel-studio-production.up.railway.app/${path.basename(outputPath)}`;
-      res.json({ videoUrl });
-
-      setTimeout(() => fs.unlink(outputPath, () => {}), 600000);
+      res.json({
+        videoUrl: `https://ai-reel-studio-production.up.railway.app/${path.basename(outputPath)}`
+      });
     }
   })
+
   .save(outputPath);
 
   } catch (err) {
