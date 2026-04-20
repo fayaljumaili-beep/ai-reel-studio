@@ -72,18 +72,20 @@ async function generateVoice(script) {
 
 // 🖼️ NEW — Dynamic image from Unsplash
 async function getImage(idea) {
-  const randomSeed = Date.now(); // 🔥 forces new image
-
-  const url = `https://source.unsplash.com/1080x1920/?${encodeURIComponent(
-    idea
-  )}&sig=${randomSeed}`;
-
   const imagePath = path.join("server/assets", "image.jpg");
 
-  const res = await fetch(url);
-  const buffer = await res.arrayBuffer();
+  const prompt = `A cinematic vertical photo representing: ${idea}, highly detailed, 4k, dramatic lighting, realistic`;
 
-  fs.writeFileSync(imagePath, Buffer.from(buffer));
+  const result = await openai.images.generate({
+    model: "gpt-image-1",
+    prompt,
+    size: "1024x1792"
+  });
+
+  const image_base64 = result.data[0].b64_json;
+  const imageBuffer = Buffer.from(image_base64, "base64");
+
+  fs.writeFileSync(imagePath, imageBuffer);
 
   return imagePath;
 }
