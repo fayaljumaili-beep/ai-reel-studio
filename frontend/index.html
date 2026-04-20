@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Reel Generator</title>
+</head>
+
+<body style="font-family: Arial; text-align: center; padding: 40px;">
+
+  <h1>🎬 AI Reel Generator</h1>
+
+  <textarea id="script" rows="5" cols="40"
+    placeholder="Enter your script here..."></textarea>
+
+  <br><br>
+
+  <button onclick="generate()">Generate Video</button>
+
+  <br><br>
+
+  <video id="video" controls style="width:300px; display:none;"></video>
+
+  <script>
+    async function generate() {
+      const script = document.getElementById('script').value;
+
+      const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ script })
+      });
+
+      const data = await res.json();
+
+      const video = document.getElementById('video');
+      video.src = data.videoUrl;
+      video.style.display = "block";
+    }
+  </script>
+
+</body>
+</html>
