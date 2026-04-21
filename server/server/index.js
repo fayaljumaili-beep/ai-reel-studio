@@ -20,6 +20,7 @@ app.use(cors({
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
+
 app.use(express.json());
 
 // ✅ Health check
