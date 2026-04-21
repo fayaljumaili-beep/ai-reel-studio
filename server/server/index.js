@@ -1,27 +1,21 @@
-process.on("uncaughtException", (err) => {
-  console.error("🔥 UNCAUGHT ERROR:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("🔥 UNHANDLED PROMISE:", err);
-});
-
-import express from "express";
-import cors from "cors";
+const express = require("express");
 
 const app = express();
 
-// 🔥 IMPORTANT: allow all origins properly
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
+// manual CORS (bulletproof)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 
 app.use(express.json());
-
-// ✅ handle preflight explicitly
-app.options("*", cors());
 
 app.get("/", (req, res) => {
   res.send("Server works");
