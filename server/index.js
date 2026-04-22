@@ -13,8 +13,7 @@ app.get("/", (req, res) => {
 
 // Main route
 app.post("/generate-video", (req, res) => {
-  const prompt = req.body.prompt.toLowerCase();
-  console.log("PROMPT:", prompt);
+  const prompt = (req.body.prompt || "").toLowerCase();
 
   let videoUrl;
 
@@ -25,11 +24,10 @@ app.post("/generate-video", (req, res) => {
   } else if (prompt.includes("nature")) {
     videoUrl = "https://cdn.pixabay.com/video/2019/03/26/22388-327070540_large.mp4";
   } else {
-    videoUrl = "https://www.w3schools.com/html/mov_bbb.mp4";
+    videoUrl = "https://cdn.pixabay.com/video/2017/08/31/11664-232650331_large.mp4";
   }
 
-  res.json({ videoUrl });
-});
+  res.json({ 
 
 const PORT = process.env.PORT || 3000;
 
