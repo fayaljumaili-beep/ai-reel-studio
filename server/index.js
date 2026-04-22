@@ -1,26 +1,17 @@
 const express = require("express");
+const cors = require("cors");
 
 const app = express();
 
-// manual CORS (bulletproof)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
+app.use(cors());
 app.use(express.json());
 
+// Test route
 app.get("/", (req, res) => {
   res.send("Server works");
 });
 
+// Main route
 app.post("/generate-video", (req, res) => {
   const prompt = req.body.prompt.toLowerCase();
 
@@ -42,5 +33,5 @@ app.post("/generate-video", (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Running on port", PORT);
+  console.log("Server running on port", PORT);
 });
