@@ -61,17 +61,16 @@
 
   const video = document.querySelector("video");
 
-  console.log("VIDEO URL:", data.videoUrl);
-
-  video.src = data.videoUrl;
-
-// 👇 ADD THESE 2 LINES
+video.src = data.videoUrl;
+video.crossOrigin = "anonymous"; // 👈 ADD THIS
 video.muted = true;
-video.play();
+video.playsInline = true;
 
-  await video.play().catch(err => {
-    console.log("Play failed:", err);
-  });
+video.load();
+
+video.play().catch((e) => {
+  console.log("Play blocked:", e);
+});
 }
   </script>
 
