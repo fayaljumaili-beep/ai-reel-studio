@@ -16,13 +16,13 @@ app.post("/generate-video", (req, res) => {
   let videoUrl;
 
 if (prompt.includes("gym")) {
-  videoUrl = "https://www.w3schools.com/html/mov_bbb.mp4";
+  videoUrl = "https://cdn.coverr.co/videos/coverr-man-doing-push-ups-1566/1080p.mp4";
 } else if (prompt.includes("motivation")) {
-  videoUrl = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+  videoUrl = "https://cdn.coverr.co/videos/coverr-man-running-at-sunrise-1573/1080p.mp4";
 } else if (prompt.includes("nature")) {
-  videoUrl = "https://www.w3schools.com/html/movie.mp4";
+  videoUrl = "https://cdn.coverr.co/videos/coverr-mountain-landscape-1579/1080p.mp4";
 } else {
-  videoUrl = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+  videoUrl = "https://cdn.coverr.co/videos/coverr-aerial-view-of-a-road-1564/1080p.mp4";
 }
 
   res.json({
