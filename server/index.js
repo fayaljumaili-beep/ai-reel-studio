@@ -15,14 +15,14 @@ app.post("/generate-video", (req, res) => {
 
   let videoUrl;
 
-  if (prompt.includes("gym")) {
-  videoUrl = "https://cdn.pixabay.com/vimeo/458/458327528_large.mp4";
+if (prompt.includes("gym")) {
+  videoUrl = "https://cdn.pixabay.com/video/2019/05/30/24177-339430569_large.mp4";
 } else if (prompt.includes("motivation")) {
-  videoUrl = "https://cdn.pixabay.com/vimeo/505/505134578_large.mp4";
+  videoUrl = "https://cdn.pixabay.com/video/2020/06/10/41608-429157172_large.mp4";
 } else if (prompt.includes("nature")) {
-  videoUrl = "https://cdn.pixabay.com/vimeo/239/239410198_large.mp4";
+  videoUrl = "https://cdn.pixabay.com/video/2020/04/18/36434-409141064_large.mp4";
 } else {
-  videoUrl = "https://cdn.pixabay.com/vimeo/320/320982888_large.mp4";
+  videoUrl = "https://cdn.pixabay.com/video/2017/08/31/11664-232650331_large.mp4";
 }
 
   res.json({

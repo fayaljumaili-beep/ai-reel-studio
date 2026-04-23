@@ -6,7 +6,7 @@
 
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       text-align: center;
       margin-top: 50px;
     }
@@ -15,7 +15,6 @@
       width: 300px;
       height: 100px;
       font-size: 16px;
-      padding: 10px;
     }
 
     button {
@@ -28,6 +27,7 @@
     video {
       margin-top: 20px;
       width: 400px;
+      background: black;
     }
   </style>
 </head>
@@ -36,42 +36,50 @@
 
   <h1>🎬 AI Reel Generator</h1>
 
-  <textarea placeholder="Type something like: gym, nature, motivation..."></textarea>
+  <textarea id="prompt" placeholder="Enter prompt..."></textarea><br>
+
+  <button id="generateBtn">Generate Video</button>
+
   <br>
 
-  <button onclick="generateVideo()">Generate Video</button>
-
-  <br><br>
-
-  <video controls crossorigin="anonymous"></video>
+  <video id="videoPlayer" controls muted playsinline></video>
 
   <script>
-    async function generateVideo() {
-  const prompt = document.querySelector("textarea").value;
+    const button = document.getElementById("generateBtn");
+    const video = document.getElementById("videoPlayer");
 
-  const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ prompt })
-  });
+    button.addEventListener("click", async () => {
+      try {
+        const prompt = document.getElementById("prompt").value;
 
-  const data = await res.json();
+        console.log("Sending request...");
 
-  const video = document.querySelector("video");
+        const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prompt })
+        });
 
-video.src = data.videoUrl;
-video.crossOrigin = "anonymous"; // 👈 ADD THIS
-video.muted = true;
-video.playsInline = true;
+        const data = await res.json();
 
-video.load();
+        console.log("Response:", data);
 
-video.play().catch((e) => {
-  console.log("Play blocked:", e);
-});
-}
+        video.src = data.videoUrl;
+        video.load();
+
+        video.muted = true;
+        video.playsInline = true;
+
+        setTimeout(() => {
+          video.play().catch(err => console.log("Autoplay blocked:", err));
+        }, 100);
+
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    });
   </script>
 
 </body>
