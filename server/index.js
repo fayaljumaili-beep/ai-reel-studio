@@ -6,7 +6,7 @@ dotenv.config();
 
 const app = express();
 
-// 🚨 THIS MUST BE BEFORE ANY ROUTES
+// ✅ CORS (must be before routes)
 app.use(cors({
   origin: "*"
 }));
@@ -26,7 +26,7 @@ app.post("/generate-video", async (req, res) => {
     console.log("Prompt:", prompt);
 
     const response = await fetch(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(prompt)}&per_page=1`,
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(prompt)}&per_page=15`,
       {
         headers: {
           Authorization: process.env.PEXELS_API_KEY,
@@ -34,27 +34,32 @@ app.post("/generate-video", async (req, res) => {
       }
     );
 
-    console.log("Pexels status:", response.status);
-
     const data = await response.json();
-    console.log("Pexels data:", data);
 
-    if (!data.videos || data.videos.length === 0) {
+    // 🔍 DEBUG (VERY IMPORTANT)
+    console.log("TOTAL VIDEOS FROM API:", data.videos?.length);
+
+    const rawLinks = (data.videos || []).map(v => v.video_files?.[0]?.link);
+    console.log("RAW LINKS:", rawLinks);
+
+    // ✅ Get ALL possible video links (better than just [0])
+    const videos = (data.videos || [])
+      .flatMap(v => (v.video_files || []).map(f => f.link))
+      .filter(Boolean)
+      .slice(0, 3);
+
+    console.log("FINAL VIDEOS:", videos);
+
+    // fallback if nothing found
+    if (!videos.length) {
       return res.json({
-        videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
+        videos: [
+          "https://www.w3schools.com/html/mov_bbb.mp4"
+        ]
       });
     }
 
-const videos = data.videos
-  .map(v => v.video_files?.[0]?.link)
-  .filter(Boolean)   // removes undefined/null
-  .slice(0, 3);
-
-console.log("RETURNING VIDEOS:", videos);
-
-return res.json({ videos });
-
-res.json({ videos });
+    return res.json({ videos });
 
   } catch (err) {
     console.error("🔥 ERROR:", err);
@@ -62,6 +67,7 @@ res.json({ videos });
   }
 });
 
+// ✅ Railway port binding
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
