@@ -34,63 +34,56 @@
 
   <textarea id="prompt" placeholder="Type something like gym..."></textarea><br>
 
-  <button id="generateBtn">Generate Video</button>
+  <button onclick="generateVideo()">Generate Video</button>
 
   <br>
 
-  <video controls autoplay muted loop width="500"></video>
+  <video id="videoPlayer" autoplay muted playsinline></video>
 
  <script>
-  const button = document.querySelector("button");
-const video = document.querySelector("video");
+let videos = [];
+let currentIndex = 0;
 
-button.onclick = async () => {
-  const prompt = document.querySelector("textarea").value;
+const videoPlayer = document.getElementById("videoPlayer");
 
-  button.innerText = "Generating...";
-  button.disabled = true;
+function playNextVideo() {
+  if (!videos.length) return;
 
-  try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt }),
-    });
+  videoPlayer.src = videos[currentIndex];
+  videoPlayer.play();
 
-    const data = await res.json();
+  currentIndex = (currentIndex + 1) % videos.length;
+}
 
-    console.log("VIDEOS:", data.videos); // 👈 IMPORTANT DEBUG
+// when video ends → play next
+videoPlayer.addEventListener("ended", playNextVideo);
 
-    const videos = data.videos;
-    let current = 0;
+async function generateVideo() {
+  const prompt = document.getElementById("prompt").value;
 
-    // play first video
-    video.src = videos[current];
-    video.load();
-    video.play();
-
-    // when video ends → play next
-    video.onended = () => {
-      current++;
-
-      if (current < videos.length) {
-        video.src = videos[current];
-        video.load();
-        video.play();
-      }
-    };
-
-  } catch (err) {
-    console.error(err);
-    alert("Something broke");
+  // ✅ THIS MUST BE INSIDE THE FUNCTION
+  if (!prompt) {
+    alert("Enter something first!");
+    return;
   }
 
-  button.innerText = "Generate Video";
-  button.disabled = false;
-};
-  
+  const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prompt }),
+  });
+
+  const data = await res.json();
+
+  console.log("VIDEOS:", data.videos);
+
+  videos = data.videos || [];
+  currentIndex = 0;
+
+  playNextVideo();
+}
 </script>
 
 </body>

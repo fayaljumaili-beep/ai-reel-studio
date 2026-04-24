@@ -42,24 +42,22 @@ app.post("/generate-video", async (req, res) => {
     const rawLinks = (data.videos || []).map(v => v.video_files?.[0]?.link);
     console.log("RAW LINKS:", rawLinks);
 
-    // ✅ Get ALL possible video links (better than just [0])
-    const videos = (data.videos || [])
-      .flatMap(v => (v.video_files || []).map(f => f.link))
-      .filter(Boolean)
-      .slice(0, 3);
+   // 🔥 pick 1 good file per video
+const uniqueVideos = data.videos.map(v => {
+  const file =
+    v.video_files.find(f => f.quality === "hd") ||
+    v.video_files[0];
 
-    console.log("FINAL VIDEOS:", videos);
+  return file.link;
+});
 
-    // fallback if nothing found
-    if (!videos.length) {
-      return res.json({
-        videos: [
-          "https://www.w3schools.com/html/mov_bbb.mp4"
-        ]
-      });
-    }
+// 🔥 shuffle
+uniqueVideos.sort(() => Math.random() - 0.5);
 
-    return res.json({ videos });
+// 🔥 take 3
+const videos = uniqueVideos.slice(0, 3);
+
+res.json({ videos });
 
   } catch (err) {
     console.error("🔥 ERROR:", err);
