@@ -1,29 +1,52 @@
-te this fully:
-
 <!DOCTYPE html>
 <html>
 <head>
   <title>AI Reel Generator</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      margin-top: 50px;
+    }
+
+    textarea {
+      width: 300px;
+      height: 100px;
+      font-size: 16px;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+
+    video {
+      margin-top: 20px;
+      width: 500px;
+    }
+  </style>
 </head>
-<body style="font-family: Arial; text-align: center; margin-top: 50px;">
+<body>
 
   <h1>🎬 AI Reel Generator</h1>
 
-  <textarea id="prompt" rows="4" cols="40">gym</textarea>
-  <br><br>
+  <textarea id="prompt" placeholder="Type something like gym..."></textarea><br>
 
-  <button id="btn">Generate Video</button>
+  <button id="generateBtn">Generate Video</button>
 
-  <br><br>
+  <br>
 
-  <video id="video" width="400" controls></video>
+  <video id="video" controls></video>
 
   <script>
-    const button = document.getElementById("btn");
+    const button = document.getElementById("generateBtn");
     const video = document.getElementById("video");
+    const textarea = document.getElementById("prompt");
 
     button.addEventListener("click", async () => {
-      const prompt = document.getElementById("prompt").value;
+      const prompt = textarea.value;
 
       console.log("Sending:", prompt);
 
@@ -40,7 +63,9 @@ te this fully:
       console.log("Response:", data);
 
       video.src = data.videoUrl;
-      video.play().catch(() => {});
+      video.play().catch(() => {
+        console.log("Autoplay blocked (normal)");
+      });
     });
   </script>
 
