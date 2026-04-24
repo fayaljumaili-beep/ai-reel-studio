@@ -61,9 +61,26 @@ button.onclick = async () => {
 
     const data = await res.json();
 
-    video.src = data.videoUrl;
+    console.log("VIDEOS:", data.videos); // 👈 IMPORTANT DEBUG
+
+    const videos = data.videos;
+    let current = 0;
+
+    // play first video
+    video.src = videos[current];
     video.load();
     video.play();
+
+    // when video ends → play next
+    video.onended = () => {
+      current++;
+
+      if (current < videos.length) {
+        video.src = videos[current];
+        video.load();
+        video.play();
+      }
+    };
 
   } catch (err) {
     console.error(err);

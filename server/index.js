@@ -45,10 +45,14 @@ app.post("/generate-video", async (req, res) => {
       });
     }
 
-    // pick 3 random videos
-const videos = data.videos.slice(0, 5).map(v => {
-  return v.video_files[0].link;
-});
+const videos = data.videos
+  .filter(v => v.video_files && v.video_files.length > 0)
+  .slice(0, 3)
+  .map(v => v.video_files[0].link);
+
+console.log("RETURNING VIDEOS:", videos);
+
+return res.json({ videos });
 
 res.json({ videos });
 
