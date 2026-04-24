@@ -1,3 +1,15 @@
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("Server works");
+});
+
 app.post("/generate-video", (req, res) => {
   const rawPrompt = req.body.prompt;
   const prompt = (rawPrompt || "").toLowerCase().trim();
@@ -23,9 +35,10 @@ app.post("/generate-video", (req, res) => {
 
   res.json({ videoUrl });
 });
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
+  console.log("🔥 THIS FILE IS RUNNING");
   console.log("Server running on port", PORT);
-  console.log("NEW VERSION DEPLOYED 🚀");
 });
