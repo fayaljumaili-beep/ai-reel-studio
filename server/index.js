@@ -21,17 +21,8 @@ app.post("/generate-video", (req, res) => {
   if (prompt.includes("gym")) {
     console.log("GYM MATCHED ✅");
     videoUrl = "https://www.w3schools.com/html/mov_bbb.mp4";
-  } 
-  else if (prompt.includes("motivation")) {
-    console.log("MOTIVATION MATCHED ✅");
-    videoUrl = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-  } 
-  else if (prompt.includes("nature")) {
-    console.log("NATURE MATCHED ✅");
-    videoUrl = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-  } 
-  else {
-    console.log("DEFAULT TRIGGERED ❌");
+  } else {
+    console.log("DEFAULT USED");
     videoUrl = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
   }
 
@@ -41,6 +32,5 @@ app.post("/generate-video", (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("🔥 THIS FILE IS RUNNING");
-  console.log("Server running on port", PORT);
+  console.log("🚀 SERVER RUNNING ON", PORT);
 });
