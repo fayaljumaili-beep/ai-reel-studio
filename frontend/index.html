@@ -62,10 +62,14 @@
 
       console.log("Response:", data);
 
-      video.src = data.videoUrl;
-      video.play().catch(() => {
-        console.log("Autoplay blocked (normal)");
-      });
+      video.pause();
+
+video.src = data.videoUrl;
+video.load();
+
+video.play().catch(() => {
+  console.log("Autoplay blocked (normal)");
+});
     });
   </script>
 
