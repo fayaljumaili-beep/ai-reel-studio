@@ -5,7 +5,12 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// 🚨 THIS MUST BE BEFORE ANY ROUTES
+app.use(cors({
+  origin: "*"
+}));
+
 app.use(express.json());
 
 app.post("/generate-video", async (req, res) => {
