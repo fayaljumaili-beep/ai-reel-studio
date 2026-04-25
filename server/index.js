@@ -1,64 +1,97 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
+import axios from "axios";
 import fs from "fs";
-import dotenv from "dotenv";
+import path from "path";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 
-dotenv.config();
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const VOICE_MAP = {
-  aggressive: "TxGEqnHWrfWFTfGW9XjX",
-  calm: "EXAVITQu4vr4xnSDxMaL",
-  luxury: "ErXwobaYiN019PkySvjV",
-  fast: "VR6AewLTigWG4xSOukaG",
-  deep: "onwK4e9ZLuTAKqWW03F9",
-  female: "21m00Tcm4TlvDq8ikWAM",
-  podcast: "AZnzlk1XvdvUeBnXmlld",
-  cold: "pNInz6obpgDQGcFmaJgB",
-  story: "yoZ06aMxZJJ28mfd3POQ"
-};
+const TEMP_DIR = "./temp";
+
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR);
+}
 
 app.post("/generate-video", async (req, res) => {
-  const { prompt, category, voice, style, length } = req.body;
+  try {
+    const { prompt, category, length } = req.body;
 
-  const duration = parseInt(length) || 60;
-  const scenesCount = Math.floor(duration / 5);
+    const duration = parseInt(length); // 30 / 60 / 90
+    const clipsNeeded = Math.ceil(duration / 5);
 
-  // fake script for now (replace later with GPT)
-  const script = `${prompt}. ${prompt}. ${prompt}. ${prompt}. ${prompt}`;
+    console.log("Fetching clips:", clipsNeeded);
 
-  const scenes = script.split(".").slice(0, scenesCount);
+    // 🔥 FETCH VIDEOS FROM PEXELS
+    const response = await axios.get(
+      `https://api.pexels.com/videos/search?query=${category}&per_page=${clipsNeeded}`,
+      {
+        headers: {
+          Authorization: process.env.PEXELS_API_KEY,
+        },
+      }
+    );
 
-  // 🎙️ generate voice
-  const selectedVoice = VOICE_MAP[voice] || VOICE_MAP.fast;
+    const videos = response.data.videos;
 
-  const voiceRes = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: script,
-        model_id: "eleven_monolingual_v1"
-      })
+    if (!videos.length) {
+      return res.status(400).send("No videos found");
     }
-  );
 
-  const audioBuffer = await voiceRes.arrayBuffer();
-  fs.writeFileSync("voice.mp3", Buffer.from(audioBuffer));
+    const clipPaths = [];
 
-  // TODO: replace with real video pipeline
-  // for now return sample video
-  const videoPath = "sample.mp4";
+    // 🔥 DOWNLOAD CLIPS
+    for (let i = 0; i < videos.length; i++) {
+      const videoFile = videos[i].video_files[0].link;
+      const filePath = path.join(TEMP_DIR, `clip${i}.mp4`);
 
-  res.sendFile(videoPath, { root: "." });
+      const writer = fs.createWriteStream(filePath);
+      const vidRes = await axios.get(videoFile, { responseType: "stream" });
+
+      vidRes.data.pipe(writer);
+
+      await new Promise((resolve) => writer.on("finish", resolve));
+
+      clipPaths.push(filePath);
+    }
+
+    console.log("Downloaded clips:", clipPaths.length);
+
+    // 🔥 CREATE CONCAT FILE
+    const concatFile = path.join(TEMP_DIR, "concat.txt");
+
+    const concatContent = clipPaths
+      .map((p) => `file '${path.resolve(p)}'`)
+      .join("\n");
+
+    fs.writeFileSync(concatFile, concatContent);
+
+    const outputPath = path.join(TEMP_DIR, "output.mp4");
+
+    // 🔥 MERGE WITH FFMPEG
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(concatFile)
+        .inputOptions(["-f concat", "-safe 0"])
+        .outputOptions(["-c copy"])
+        .save(outputPath)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    console.log("Video created!");
+
+    res.sendFile(path.resolve(outputPath));
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating video");
+  }
 });
 
 app.listen(8080, () => console.log("Server running 🚀"));

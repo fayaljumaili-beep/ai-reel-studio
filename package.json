@@ -1,7 +1,7 @@
 {
   "name": "ai-reel-studio",
   "version": "1.0.0",
-   "type": "module",
+  "type": "module",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js"
