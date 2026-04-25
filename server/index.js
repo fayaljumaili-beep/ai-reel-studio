@@ -12,81 +12,148 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const TEMP_DIR = "./temp";
+const TEMP = "./temp";
+if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP);
 
-if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR);
+// 🧠 VIRAL SCRIPT
+function splitScript(prompt) {
+  return [
+    "Nobody tells you this...",
+    `The truth about ${prompt}...`,
+    "Most people get this completely wrong.",
+    "This is why you're stuck.",
+    "Do this instead.",
+    "Watch what happens next."
+  ];
 }
 
+// 🔊 VOICE
+async function generateVoice(text) {
+  const res = await axios.post(
+    "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+    {
+      text,
+      model_id: "eleven_monolingual_v1"
+    },
+    {
+      headers: {
+        "xi-api-key": process.env.ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+      },
+      responseType: "arraybuffer"
+    }
+  );
+
+  const file = path.join(TEMP, "voice.mp3");
+  fs.writeFileSync(file, res.data);
+  return file;
+}
+
+// 🎬 MAIN ENGINE
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, category, length } = req.body;
+    const { prompt, category } = req.body;
 
-    const duration = parseInt(length); // 30 / 60 / 90
-    const clipsNeeded = Math.ceil(duration / 5);
+    const scenes = splitScript(prompt);
+    const sceneDuration = 3;
 
-    console.log("Fetching clips:", clipsNeeded);
+    // 🔊 voice
+    const audio = await generateVoice(scenes.join(". "));
 
-    // 🔥 FETCH VIDEOS FROM PEXELS
-    const response = await axios.get(
-      `https://api.pexels.com/videos/search?query=${category}&per_page=${clipsNeeded}`,
+    // 🎥 get clips
+    const pexels = await axios.get(
+      `https://api.pexels.com/videos/search?query=${category}&per_page=${scenes.length}`,
       {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY,
-        },
+        headers: { Authorization: process.env.PEXELS_API_KEY }
       }
     );
 
-    const videos = response.data.videos;
+    const videos = pexels.data.videos;
+    const processed = [];
 
-    if (!videos.length) {
-      return res.status(400).send("No videos found");
+    for (let i = 0; i < scenes.length; i++) {
+      const url = videos[i]?.video_files[0]?.link;
+      if (!url) continue;
+
+      const raw = path.join(TEMP, `raw${i}.mp4`);
+      const out = path.join(TEMP, `scene${i}.mp4`);
+
+      // download
+      const writer = fs.createWriteStream(raw);
+      const vid = await axios.get(url, { responseType: "stream" });
+      vid.data.pipe(writer);
+      await new Promise(r => writer.on("finish", r));
+
+      // 🎬 trim + zoom + captions
+      await new Promise((resolve, reject) => {
+        ffmpeg(raw)
+          .setStartTime(0)
+          .duration(sceneDuration)
+          .videoFilters([
+            "scale=1280:720",
+            "zoompan=z='min(zoom+0.0015,1.2)':d=75",
+
+            // main caption
+            `drawtext=text='${scenes[i]}':
+             fontcolor=white:
+             fontsize=48:
+             box=1:
+             boxcolor=black@0.7:
+             boxborderw=20:
+             x=(w-text_w)/2:
+             y=(h-text_h)/2`,
+
+            // hook (only first scene)
+            `drawtext=text='${i === 0 ? "WATCH THIS" : ""}':
+             fontcolor=yellow:
+             fontsize=32:
+             x=(w-text_w)/2:
+             y=80`
+          ])
+          .save(out)
+          .on("end", resolve)
+          .on("error", reject);
+      });
+
+      processed.push(out);
     }
 
-    const clipPaths = [];
+    // 🧩 concat
+    const concatFile = path.join(TEMP, "concat.txt");
+    fs.writeFileSync(
+      concatFile,
+      processed.map(p => `file '${path.resolve(p)}'`).join("\n")
+    );
 
-    // 🔥 DOWNLOAD CLIPS
-    for (let i = 0; i < videos.length; i++) {
-      const videoFile = videos[i].video_files[0].link;
-      const filePath = path.join(TEMP_DIR, `clip${i}.mp4`);
+    const merged = path.join(TEMP, "merged.mp4");
 
-      const writer = fs.createWriteStream(filePath);
-      const vidRes = await axios.get(videoFile, { responseType: "stream" });
-
-      vidRes.data.pipe(writer);
-
-      await new Promise((resolve) => writer.on("finish", resolve));
-
-      clipPaths.push(filePath);
-    }
-
-    console.log("Downloaded clips:", clipPaths.length);
-
-    // 🔥 CREATE CONCAT FILE
-    const concatFile = path.join(TEMP_DIR, "concat.txt");
-
-    const concatContent = clipPaths
-      .map((p) => `file '${path.resolve(p)}'`)
-      .join("\n");
-
-    fs.writeFileSync(concatFile, concatContent);
-
-    const outputPath = path.join(TEMP_DIR, "output.mp4");
-
-    // 🔥 MERGE WITH FFMPEG
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(concatFile)
         .inputOptions(["-f concat", "-safe 0"])
         .outputOptions(["-c copy"])
-        .save(outputPath)
+        .save(merged)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    console.log("Video created!");
+    // 🔊 add audio
+    const final = path.join(TEMP, "final.mp4");
 
-    res.sendFile(path.resolve(outputPath));
+    await new Promise((resolve, reject) => {
+      ffmpeg(merged)
+        .input(audio)
+        .outputOptions([
+          "-c:v libx264",
+          "-c:a aac",
+          "-shortest"
+        ])
+        .save(final)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    res.sendFile(path.resolve(final));
 
   } catch (err) {
     console.error(err);
