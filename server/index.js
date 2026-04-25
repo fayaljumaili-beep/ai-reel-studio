@@ -1,15 +1,15 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
 const PORT = process.env.PORT || 8080;
-
-// 🔑 OPTIONAL: add OpenAI later
-// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 app.post("/generate-video", async (req, res) => {
   try {
@@ -23,7 +23,7 @@ app.post("/generate-video", async (req, res) => {
 
     // 🎥 FETCH VIDEOS FROM PEXELS
     const response = await fetch(
-      `https://api.pexels.com/videos/search?query=${prompt}&per_page=15`,
+      `https://api.pexels.com/videos/search?query=${prompt}&per_page=3`,
       {
         headers: {
           Authorization: process.env.PEXELS_API_KEY,
@@ -33,102 +33,76 @@ app.post("/generate-video", async (req, res) => {
 
     const data = await response.json();
 
-    // 🧠 Extract valid video links
-    let rawVideos = data.videos || [];
+    const videos =
+      data.videos?.map(
+        (v) => v.video_files?.find((f) => f.quality === "hd")?.link
+      ) || [];
 
-    let videoUrls = rawVideos
-      .map((v) => v.video_files?.[0]?.link)
-      .filter(Boolean);
+    console.log("VIDEOS:", videos);
 
-    console.log("RAW VIDEOS:", videoUrls.length);
-
-    // 🎯 Take first 3 clean videos
-    let videos = videoUrls.slice(0, 3);
-
-    console.log("FINAL VIDEOS:", videos);
-
-    // 🧠 CAPTIONS (SAFE VERSION — NO CRASH)
-   let captions = [];
-
-try {
-  const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: `Create ${videos.length} short viral captions about "${prompt}".
-          
-Rules:
-- Hook style (TikTok/Reels)
-- Emotional / curiosity
-- Max 8 words
-- No numbering
-
-Return ONLY JSON array.`,
-        },
-      ],
-    }),
-  });
-
-  const aiData = await aiRes.json();
-
-  captions = JSON.parse(aiData.choices[0].message.content);
-
-} catch (err) {
-  console.log("AI failed, using fallback captions");
-
-  captions = videos.map(
-    (_, i) => `This changes everything... (${i + 1})`
-  );
-}
-
-    // 🔥 OPTIONAL AI CAPTIONS (UNCOMMENT LATER)
-    /*
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: `Create ${videos.length} viral short captions about "${prompt}". Return ONLY JSON array.`,
-          },
-        ],
-      }),
-    });
-
-    const aiData = await aiRes.json();
+    // 🧠 GENERATE AI CAPTIONS
+    let captions = [];
 
     try {
-      captions = JSON.parse(aiData.choices[0].message.content);
-    } catch (err) {
-      console.log("AI parse failed, using fallback captions");
-    }
-    */
+      const aiRes = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You create short, viral, punchy captions for social media reels.",
+              },
+              {
+                role: "user",
+                content: `Create 3 short viral captions for: ${prompt}`,
+              },
+            ],
+          }),
+        }
+      );
 
-    // ✅ FINAL RESPONSE
+      const aiData = await aiRes.json();
+
+      console.log("AI RESPONSE:", aiData);
+
+      const text =
+        aiData.choices?.[0]?.message?.content || "";
+
+      captions = text
+        .split("\n")
+        .map((line) => line.replace(/^\d+[\).\s-]*/, "").trim())
+        .filter((line) => line.length > 0)
+        .slice(0, 3);
+
+    } catch (err) {
+      console.log("AI FAILED:", err);
+
+      captions = videos.map(
+        (_, i) => `${prompt} clip ${i + 1} 🔥`
+      );
+    }
+
+    console.log("CAPTIONS:", captions);
+
+    // 📦 RETURN TO FRONTEND
     res.json({
       videos,
       captions,
     });
-
-  } catch (error) {
-    console.error("ERROR:", error);
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// 🚀 START SERVER
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
