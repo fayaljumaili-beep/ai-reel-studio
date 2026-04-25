@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Reel Studio</title>
+
+<style>
+body {
+  margin:0;
+  font-family:sans-serif;
+  background:#0b0b0f;
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.card {
+  width:420px;
+}
+
+input, textarea, select {
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border-radius:10px;
+  border:none;
+  background:#111;
+  color:white;
+}
+
+button {
+  width:100%;
+  padding:14px;
+  margin-top:10px;
+  border:none;
+  border-radius:10px;
+  background:linear-gradient(90deg,#ff00ff,#7a00ff);
+  color:white;
+  cursor:pointer;
+}
+
+video {
+  width:100%;
+  margin-top:20px;
+  border-radius:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h1>AI Reel Studio</h1>
+
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+
+<button onclick="signup()">Sign Up</button>
+<button onclick="login()">Login</button>
+<button onclick="upgrade()">Upgrade ($9.99)</button>
+
+<textarea id="prompt" placeholder="gym, success..."></textarea>
+
+<select id="style">
+  <option value="dark">Dark</option>
+  <option value="luxury">Luxury</option>
+  <option value="gym">Gym</option>
+</select>
+
+<button onclick="generate()">Generate</button>
+<button onclick="exportVideo()">Export</button>
+
+<video id="video" controls></video>
+
+</div>
+
+<script>
+const API = "https://ai-reel-studio-production.up.railway.app";
+
+let videos = [];
+let script = [];
+let index = 0;
+let token = null;
+
+async function signup() {
+  await fetch(API + "/signup", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      email:email.value,
+      password:password.value
+    })
+  });
+  alert("Signed up");
+}
+
+async function login() {
+  const res = await fetch(API + "/login", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      email:email.value,
+      password:password.value
+    })
+  });
+
+  const data = await res.json();
+  token = data.token;
+  alert("Logged in");
+}
+
+async function upgrade() {
+  const res = await fetch(API + "/create-checkout", { method:"POST" });
+  const data = await res.json();
+  window.location = data.url;
+}
+
+async function generate() {
+  const res = await fetch(API + "/generate-video", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ prompt:prompt.value })
+  });
+
+  const data = await res.json();
+  videos = data.videos;
+  script = data.script;
+  index = 0;
+  playLoop();
+}
+
+function playLoop() {
+  video.src = videos[index];
+
+  video.onloadedmetadata = () => {
+    video.play();
+    setTimeout(() => {
+      index = (index + 1) % videos.length;
+      playLoop();
+    }, 2500);
+  };
+}
+
+async function exportVideo() {
+  if (!token) {
+    alert("Login required");
+    return;
+  }
+
+  const res = await fetch(API + "/export-video", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      videos,
+      script,
+      style:style.value
+    })
+  });
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "reel.mp4";
+  a.click();
+}
+</script>
+
+</body>
+</html>
