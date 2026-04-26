@@ -3,56 +3,66 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
+import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const TEMP_DIR = path.join(process.cwd(), "temp");
+const TEMP_DIR = "temp";
 
+// ensure temp folder exists
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR);
 }
 
+// 🎬 MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("🎬 Generating video...");
+    const { prompt } = req.body;
 
-    const sceneVideos = [];
+    console.log("🎬 Generating video for:", prompt);
 
-    // 🔥 SIMPLE VIDEO SCENES (NO TEXT FILTER)
-    for (let i = 0; i < 3; i++) {
-      const scenePath = path.join(TEMP_DIR, `scene${i}.mp4`);
+    // -----------------------------
+    // 1. MOCK SCENES (you can upgrade later)
+    // -----------------------------
+    const scenes = [
+      "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4",
+      "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4"
+    ];
 
-      await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input("color=c=black:s=720x1280:d=2")
-          .inputFormat("lavfi")
-          .outputOptions([
-            "-c:v libx264",
-            "-t 2",
-            "-pix_fmt yuv420p"
-          ])
-          .save(scenePath)
-          .on("end", resolve)
-          .on("error", reject);
-      });
+    const videoPaths = [];
 
-      sceneVideos.push(scenePath);
+    // -----------------------------
+    // 2. DOWNLOAD VIDEOS
+    // -----------------------------
+    for (let i = 0; i < scenes.length; i++) {
+      const url = scenes[i];
+      const filePath = path.join(TEMP_DIR, `scene${i}.mp4`);
+
+      const response = await fetch(url);
+      const buffer = await response.buffer();
+
+      fs.writeFileSync(filePath, buffer);
+      videoPaths.push(filePath);
     }
 
-    // 🧾 CONCAT FILE
+    // -----------------------------
+    // 3. CREATE CONCAT FILE
+    // -----------------------------
     const concatFile = path.join(TEMP_DIR, "concat.txt");
 
-    const concatContent = sceneVideos
-      .map((p) => `file '${p}'`)
+    const concatContent = videoPaths
+      .map((v) => `file '${path.resolve(v)}'`)
       .join("\n");
 
     fs.writeFileSync(concatFile, concatContent);
 
-    // 🎥 FINAL VIDEO
     const finalPath = path.join(TEMP_DIR, "final.mp4");
 
+    // -----------------------------
+    // 4. CONCAT VIDEOS (SAFE)
+    // -----------------------------
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(concatFile)
@@ -69,8 +79,11 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    console.log("✅ Video ready");
+    console.log("✅ Video ready:", finalPath);
 
+    // -----------------------------
+    // 5. RETURN VIDEO
+    // -----------------------------
     res.sendFile(path.resolve(finalPath));
 
   } catch (err) {
@@ -79,6 +92,9 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
+// -----------------------------
+// SERVER
+// -----------------------------
 app.listen(8080, () => {
   console.log("🚀 Server running on 8080");
 });
