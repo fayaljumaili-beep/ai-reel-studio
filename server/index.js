@@ -15,7 +15,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 
 // ----------------------
-// 🧠 TEXT ESCAPE (CRITICAL FIX)
+// 🧠 TEXT ESCAPE (CRITICAL)
 // ----------------------
 function escapeText(text) {
   return text
@@ -27,7 +27,7 @@ function escapeText(text) {
 }
 
 // ----------------------
-// 🎥 GET LOCAL VIDEO (fallback)
+// 🎥 LOCAL VIDEO (fallback)
 // ----------------------
 function getLocalVideo() {
   const dir = path.join(process.cwd(), "server/assets/videos");
@@ -39,7 +39,7 @@ function getLocalVideo() {
   const files = fs.readdirSync(dir).filter(f => f.endsWith(".mp4"));
 
   if (files.length === 0) {
-    throw new Error("no videos inside folder");
+    throw new Error("no videos in folder");
   }
 
   const random = files[Math.floor(Math.random() * files.length)];
@@ -47,7 +47,7 @@ function getLocalVideo() {
 }
 
 // ----------------------
-// 🌍 FETCH VIDEO FROM PEXELS
+// 🌍 FETCH FROM PEXELS
 // ----------------------
 async function getPexelsVideo(query) {
   try {
@@ -63,16 +63,18 @@ async function getPexelsVideo(query) {
       }
     });
 
+    if (!res.data.videos || res.data.videos.length === 0) {
+      console.log("⚠️ No Pexels results → fallback");
+      return getLocalVideo();
+    }
+
     const video = res.data.videos[0];
-
-    if (!video) throw new Error("No Pexels videos");
-
-    const file = video.video_files.find(v => v.quality === "sd") || video.video_files[0];
+    const file = video.video_files[0];
 
     const url = file.link;
-    const output = path.join(process.cwd(), "temp.mp4");
+    const tempPath = path.join(process.cwd(), "temp.mp4");
 
-    const writer = fs.createWriteStream(output);
+    const writer = fs.createWriteStream(tempPath);
 
     const response = await axios({
       url,
@@ -83,7 +85,7 @@ async function getPexelsVideo(query) {
     response.data.pipe(writer);
 
     return new Promise((resolve, reject) => {
-      writer.on("finish", () => resolve(output));
+      writer.on("finish", () => resolve(tempPath));
       writer.on("error", reject);
     });
 
@@ -99,7 +101,7 @@ async function getPexelsVideo(query) {
 function buildVideo({ input, text, output }) {
   return new Promise((resolve, reject) => {
 
-    const safeText = escapeText(text);
+    const safeText = escapeText(text).slice(0, 100);
 
     const cmd = `
       ffmpeg -y -i "${input}" -vf "drawtext=
@@ -136,7 +138,6 @@ app.post("/generate-video", async (req, res) => {
     const { prompt } = req.body;
 
     const videoPath = await getPexelsVideo(prompt);
-
     const outputPath = path.join(process.cwd(), "output.mp4");
 
     await buildVideo({
@@ -147,8 +148,14 @@ app.post("/generate-video", async (req, res) => {
 
     res.sendFile(outputPath);
 
+    // 🧹 cleanup
+    setTimeout(() => {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      if (fs.existsSync("temp.mp4")) fs.unlinkSync("temp.mp4");
+    }, 5000);
+
   } catch (err) {
-    console.error(err);
+    console.error("SERVER ERROR:", err);
     res.status(500).json({ error: "video generation failed" });
   }
 });
