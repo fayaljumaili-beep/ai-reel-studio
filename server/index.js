@@ -22,7 +22,7 @@ const openai = new OpenAI({
 });
 
 // ===============================
-// 🔹 HELPER: DOWNLOAD VIDEO
+// DOWNLOAD FILE
 // ===============================
 async function downloadFile(url, outputPath) {
   const res = await fetch(url);
@@ -31,9 +31,9 @@ async function downloadFile(url, outputPath) {
 }
 
 // ===============================
-// 🔹 HELPER: GET PEXELS VIDEOS
+// GET VIDEOS FROM PEXELS
 // ===============================
-async function getPexelsVideos(query, count = 5) {
+async function getPexelsVideos(query, count = 6) {
   const res = await fetch(
     `https://api.pexels.com/videos/search?query=${query}&per_page=${count}`,
     {
@@ -52,7 +52,7 @@ async function getPexelsVideos(query, count = 5) {
 }
 
 // ===============================
-// 🔹 GENERATE SCRIPT
+// GENERATE SCRIPT
 // ===============================
 async function generateScript(prompt) {
   const completion = await openai.chat.completions.create({
@@ -61,12 +61,9 @@ async function generateScript(prompt) {
       {
         role: "system",
         content:
-          "Write a short, punchy motivational script for a TikTok video. Keep it under 90 seconds spoken. Break into short lines.",
+          "Write a short, punchy motivational TikTok script under 90 seconds. Use short impactful lines.",
       },
-      {
-        role: "user",
-        content: prompt,
-      },
+      { role: "user", content: prompt },
     ],
   });
 
@@ -74,7 +71,7 @@ async function generateScript(prompt) {
 }
 
 // ===============================
-// 🔹 GENERATE VOICE
+// GENERATE VOICE
 // ===============================
 async function generateVoice(text) {
   const response = await openai.audio.speech.create({
@@ -92,34 +89,28 @@ async function generateVoice(text) {
 }
 
 // ===============================
-// 🔹 CREATE VIDEO
+// MAIN ROUTE
 // ===============================
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, duration = 30 } = req.body;
+    const { prompt } = req.body;
 
     console.log("🎬 Generating:", prompt);
 
-    // ===============================
     // 1. SCRIPT + VOICE
-    // ===============================
     const script = await generateScript(prompt);
     const voicePath = await generateVoice(script);
 
     console.log("🧠 Script:", script);
 
-    // ===============================
-    // 2. GET VIDEOS
-    // ===============================
-    const videos = await getPexelsVideos(prompt, 6);
+    // 2. DOWNLOAD VIDEOS
+    const videos = await getPexelsVideos(prompt);
 
     for (const v of videos) {
       await downloadFile(v.url, v.file);
     }
 
-    // ===============================
-    // 3. CREATE CONCAT FILE
-    // ===============================
+    // 3. CONCAT FILE
     const concatFile = path.join(__dirname, "concat.txt");
 
     fs.writeFileSync(
@@ -127,9 +118,7 @@ app.post("/generate-video", async (req, res) => {
       videos.map((v) => `file '${v.file}'`).join("\n")
     );
 
-    // ===============================
     // 4. MERGE VIDEO
-    // ===============================
     const mergedVideo = path.join(__dirname, "merged.mp4");
 
     await new Promise((resolve, reject) => {
@@ -142,9 +131,7 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    // ===============================
-    // 5. ADD AUDIO (VOICE + MUSIC)
-    // ===============================
+    // 5. ADD AUDIO (FIXED ✅)
     const finalVideo = path.join(__dirname, "final.mp4");
     const musicPath = path.join(__dirname, "assets/music.mp3");
 
@@ -155,19 +142,21 @@ app.post("/generate-video", async (req, res) => {
         .complexFilter([
           "[1:a]volume=1[a1]",
           "[2:a]volume=0.3[a2]",
-          "[a1][a2]amix=inputs=2:duration=longest",
+          "[a1][a2]amix=inputs=2:duration=longest[aout]",
         ])
-        .outputOptions(["-map 0:v", "-map [aout]"])
-        .outputOptions("-shortest")
+        .outputOptions([
+          "-map 0:v",
+          "-map [aout]",
+          "-shortest",
+        ])
         .save(finalVideo)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    // ===============================
-    // 6. SEND VIDEO
-    // ===============================
+    // 6. RETURN VIDEO
     res.sendFile(finalVideo);
+
   } catch (err) {
     console.error("❌ FULL ERROR:", err);
     res.status(500).json({ error: err.message || "FAILED" });
