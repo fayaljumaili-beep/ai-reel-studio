@@ -7,7 +7,6 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// middleware
 app.use(express.json());
 app.use(cors());
 
@@ -31,18 +30,18 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    // 🔥 FORCE LOW MEMORY (important for Railway)
+    // 🔥 keep it small for Railway
     const videoDuration = 8;
 
-    // clean text for ffmpeg
-    const safeText = prompt.replace(/'/g, "").replace(/:/g, "");
+    // ✅ VERY SAFE text (this is key)
+    const safeText = prompt
+      .replace(/[^a-zA-Z0-9 ]/g, "") // remove ALL risky chars
+      .substring(0, 60); // limit length
 
-    // ✅ FIXED: filters defined
-    const filters = [
-      `drawtext=text='${safeText}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`
-    ];
+    // ✅ NO quotes → avoids FFmpeg parsing bugs
+    const filter = `drawtext=text=${safeText}:fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`;
 
-    // delete old output if exists
+    // delete old output
     if (fs.existsSync(outputPath)) {
       fs.unlinkSync(outputPath);
     }
@@ -52,15 +51,15 @@ app.post("/generate-video", async (req, res) => {
       .loop(videoDuration)
       .input(audioPath)
       .outputOptions([
-        "-t " + videoDuration,
-        "-vf " + filters.join(","),
-        "-pix_fmt yuv420p",
-        "-c:v libx264",
-        "-preset ultrafast",
-        "-crf 32",
-        "-s 720x1280",
-        "-c:a aac",
-        "-b:a 96k",
+        "-t", String(videoDuration),
+        "-vf", filter,
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "32",
+        "-s", "720x1280",
+        "-c:a", "aac",
+        "-b:a", "96k",
         "-shortest"
       ])
       .save(outputPath)
@@ -69,7 +68,7 @@ app.post("/generate-video", async (req, res) => {
         res.sendFile(outputPath);
       })
       .on("error", (err) => {
-        console.error("FFMPEG ERROR:", err);
+        console.error("FFMPEG ERROR:", err.message);
         res.status(500).json({ error: "Video generation failed" });
       });
 
