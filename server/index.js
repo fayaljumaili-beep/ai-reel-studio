@@ -20,42 +20,39 @@ const outputPath = path.join(__dirname, "final-reel.mp4");
 const words = text.split(" ");
 const wordDuration = duration / words.length;
 
-// 🔥 Hook (top text)
 const hook = "MAKE MONEY FAST";
 
 let filters = [];
 
 // 🎥 Smooth zoom
+filters.push("zoompan=z='min(zoom+0.0005,1.2)':d=125");
+
+// 🧠 Hook (FIXED QUOTES)
 filters.push(
-  "zoompan=z='min(zoom+0.0005,1.2)':d=125"
+  `drawtext=text='${hook.replace(/'/g, "")}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`
 );
 
-// 🧠 Hook at top
-filters.push(
-  `drawtext=text='${hook}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`
-);
-
-// 💬 Word-by-word captions (center)
+// 💬 Word-by-word
 words.forEach((word, i) => {
   const start = (i * wordDuration).toFixed(2);
   const end = ((i + 1) * wordDuration).toFixed(2);
 
   filters.push(
-    `drawtext=text='${word}':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h/2):enable='between(t,${start},${end})'`
+    `drawtext=text='${word.replace(/'/g, "")}':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h/2):enable='between(t,${start},${end})'`
   );
 });
 
-// 📌 Bottom subtitle
+// 📌 Bottom text
 filters.push(
-  `drawtext=text='${text}':fontcolor=cyan:fontsize=40:x=(w-text_w)/2:y=h-120`
+  `drawtext=text='${text.replace(/'/g, "")}':fontcolor=cyan:fontsize=40:x=(w-text_w)/2:y=h-120`
 );
 
 ffmpeg()
   .input(imagePath)
   .loop(duration)
   .outputOptions([
-    "-t " + duration,
-    "-vf " + filters.join(","),
+    `-t ${duration}`,
+    `-vf ${filters.join(",")}`,
     "-pix_fmt yuv420p",
     "-c:v libx264"
   ])
