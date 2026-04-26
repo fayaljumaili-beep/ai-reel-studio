@@ -81,22 +81,20 @@ app.post("/generate-video", async (req, res) => {
       await new Promise((resolve, reject) => {
         ffmpeg()
           .input(imgPath)
-          .loop(5)
-          .videoFilters([
-            "scale=1280:720",
+          .loop(1)
+          ..videoFilters([
+  "scale=1280:720",
 
-            "zoompan=z='min(zoom+0.0015,1.2)':d=125",
-
-            `drawtext=
-              text='${text}':
-              fontcolor=white:
-              fontsize=48:
-              box=1:
-              boxcolor=black@0.7:
-              boxborderw=20:
-              x=(w-text_w)/2:
-              y=(h-text_h)/2`
-          ])
+  `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:
+   text='${safeText(scenes[i])}':
+   fontcolor=white:
+   fontsize=42:
+   box=1:
+   boxcolor=black@0.7:
+   boxborderw=15:
+   x=(w-text_w)/2:
+   y=(h-text_h)/2`
+])
           .outputOptions("-t 5")
           .save(scenePath)
           .on("end", resolve)
