@@ -20,7 +20,7 @@ const __dirname = path.dirname(__filename);
 
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("🚀 START");
+    console.log("🚀 START REQUEST");
 
     const { prompt = "how to become rich and successful" } = req.body;
 
@@ -29,13 +29,34 @@ app.post("/generate-video", async (req, res) => {
     const voicePath = path.join(__dirname, "voice.mp3");
     const outputVideo = path.join(__dirname, "output.mp4");
 
-    // 🔥 STEP 1 — GENERATE VOICE
+    // 🧠 STEP 1 — GENERATE VIRAL SCRIPT
+    console.log("🧠 Generating script...");
+
+    const scriptRes = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You create short viral video scripts. Format: Hook sentence. Body sentence. CTA sentence."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+    });
+
+    const script = scriptRes.choices[0].message.content;
+    console.log("🧠 SCRIPT:", script);
+
+    // 🎤 STEP 2 — GENERATE VOICE
     console.log("🎤 Generating voice...");
 
     const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice: "alloy",
-      input: prompt,
+      input: script,
     });
 
     const buffer = Buffer.from(await speech.arrayBuffer());
@@ -43,51 +64,70 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("✅ Voice saved");
 
-    // 🔥 STEP 2 — GET AUDIO DURATION
-    const duration = 12; // keep simple for now
+    // ⏱️ DURATION (safe fixed for Railway)
+    const duration = 12;
 
-    const words = prompt.split(" ");
+    const words = script.split(" ");
     const wordDuration = duration / words.length;
 
     const filters = [];
 
-    // 🎬 ZOOM
-    filters.push("zoompan=z='min(zoom+0.0005,1.1)':d=125:s=720x1280");
-
-    // 🔥 HOOK
+    // 🎬 ZOOM (cinematic movement)
     filters.push(
-      `drawtext=text='MAKE MONEY FAST':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=80`
+      "zoompan=z='min(zoom+0.0008,1.2)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=125:s=720x1280"
     );
 
-    // 🔥 WORD CAPTIONS (still simple, next step = real timing)
+    // 🔥 HOOK (top text)
+    const hook = script.split(".")[0];
+
+    filters.push(
+      `drawtext=text='${hook}':
+       fontcolor=yellow:
+       fontsize=80:
+       x=(w-text_w)/2:
+       y=100`
+    );
+
+    // 🔥 WORD-BY-WORD CAPTIONS
     words.forEach((word, i) => {
       const start = i * wordDuration;
       const end = start + wordDuration;
 
       filters.push(
-        `drawtext=text='${word}':fontcolor=cyan:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start},${end})'`
+        `drawtext=text='${word.toUpperCase()}':
+         fontcolor=white:
+         fontsize=72:
+         borderw=4:
+         bordercolor=black:
+         x=(w-text_w)/2:
+         y=(h-text_h)/2:
+         enable='between(t,${start},${end})'`
       );
     });
 
-    // 🔥 SUBTITLE
+    // 🔥 SUBTITLE (bottom)
     filters.push(
-      `drawtext=text='${prompt}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=h-120`
+      `drawtext=text='${script}':
+       fontcolor=white:
+       fontsize=40:
+       x=(w-text_w)/2:
+       y=h-120`
     );
 
-    // 🔥 STEP 3 — FFMPEG
+    // 🎬 STEP 3 — FFMPEG
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(imagePath)
         .loop(duration)
 
-        // 🔥 VOICE
+        // 🎤 VOICE
         .input(voicePath)
 
-        // 🔥 MUSIC (LOWER VOLUME)
+        // 🎵 MUSIC
         .input(musicPath)
         .complexFilter([
-          "[2:a]volume=0.2[a2]",
-          "[1:a][a2]amix=inputs=2:duration=longest[aout]",
+          "[2:a]volume=0.15[a2]",
+          "[1:a][a2]amix=inputs=2:duration=longest[aout]"
         ])
 
         .videoFilters(filters)
@@ -98,7 +138,8 @@ app.post("/generate-video", async (req, res) => {
           "-t " + duration,
           "-preset ultrafast",
           "-crf 30",
-          "-shortest",
+          "-pix_fmt yuv420p",
+          "-shortest"
         ])
 
         .save(outputVideo)
@@ -106,16 +147,16 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    console.log("🎬 DONE");
+    console.log("🎬 VIDEO READY");
 
     res.sendFile(outputVideo);
 
   } catch (err) {
-    console.error("🔥 ERROR:", err);
-    res.status(500).json({ error: err.message });
+    console.error("🔥 FULL ERROR:", err);
+    res.status(500).json({ error: err.message || "FAILED" });
   }
 });
 
 app.listen(8080, () => {
-  console.log("🚀 Server running on 8080");
+  console.log("🚀 Server running on port 8080");
 });
