@@ -9,62 +9,67 @@ import path from "path";
 const app = express();
 app.use(express.json());
 
-// ✅ FIXED CORS (IMPORTANT)
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
 }));
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// 📁 temp folder
 const TEMP_DIR = "temp";
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// 🎬 generate endpoint
+// 🔊 SIMPLE TEXT SPLIT
+function splitText(prompt) {
+  return prompt.split(".").filter(s => s.trim().length > 0);
+}
+
+// 🔊 TEXT TO SPEECH (FREE)
+async function generateVoice(text, filePath) {
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`;
+
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+
+  fs.writeFileSync(filePath, Buffer.from(buffer));
+}
+
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt, length = "60" } = req.body;
 
-    // 🎯 duration logic
-    let duration = 60;
-    if (length === "30") duration = 30;
-    if (length === "90") duration = 90;
+    let duration = length === "90" ? 90 : length === "30" ? 30 : 60;
 
-    // 🎬 scenes (3–5 scenes)
-    const sceneCount = 4;
+    const scenes = splitText(prompt);
+    const sceneCount = Math.min(scenes.length, 5) || 3;
     const sceneDuration = Math.floor(duration / sceneCount);
 
-    // 🔥 fetch images (placeholder free API)
-    const imageUrls = [];
-    for (let i = 0; i < sceneCount; i++) {
-      imageUrls.push(`https://picsum.photos/1080/1920?random=${Date.now()}${i}`);
-    }
-
-    // 📥 download images
-    const imagePaths = [];
-    for (let i = 0; i < imageUrls.length; i++) {
-      const imgPath = path.join(TEMP_DIR, `img${i}.jpg`);
-      const response = await fetch(imageUrls[i]);
-      const buffer = await response.arrayBuffer();
-      fs.writeFileSync(imgPath, Buffer.from(buffer));
-      imagePaths.push(imgPath);
-    }
-
-    // 🎬 create scene videos
     const sceneVideos = [];
 
-    for (let i = 0; i < imagePaths.length; i++) {
+    for (let i = 0; i < sceneCount; i++) {
+      const text = scenes[i] || prompt;
+
+      // 🖼 image
+      const imgPath = path.join(TEMP_DIR, `img${i}.jpg`);
+      const imgRes = await fetch(`https://picsum.photos/1080/1920?random=${Date.now()}${i}`);
+      fs.writeFileSync(imgPath, Buffer.from(await imgRes.arrayBuffer()));
+
+      // 🔊 voice
+      const audioPath = path.join(TEMP_DIR, `voice${i}.mp3`);
+      await generateVoice(text, audioPath);
+
       const scenePath = path.join(TEMP_DIR, `scene${i}.mp4`);
 
+      // 🎬 VIDEO + AUDIO + CAPTION
       await new Promise((resolve, reject) => {
-        ffmpeg(imagePaths[i])
+        ffmpeg()
+          .input(imgPath)
           .loop(sceneDuration)
+          .input(audioPath)
           .outputOptions([
-            "-vf scale=1080:1920",
             "-t " + sceneDuration,
-            "-r 30"
+            "-vf",
+            `scale=1080:1920,drawtext=text='${text.replace(/:/g, "").replace(/'/g, "")}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-200`,
+            "-shortest"
           ])
           .save(scenePath)
           .on("end", resolve)
@@ -74,40 +79,31 @@ app.post("/generate-video", async (req, res) => {
       sceneVideos.push(scenePath);
     }
 
-    // 📄 concat file
+    // 📄 concat
     const concatFile = path.join(TEMP_DIR, "concat.txt");
-    const concatContent = sceneVideos
-      .map(v => `file '${path.resolve(v)}'`)
-      .join("\n");
+    fs.writeFileSync(
+      concatFile,
+      sceneVideos.map(v => `file '${path.resolve(v)}'`).join("\n")
+    );
 
-    fs.writeFileSync(concatFile, concatContent);
-
-    // 🎥 final video
     const finalPath = path.join(TEMP_DIR, "final.mp4");
 
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(concatFile)
         .inputOptions(["-f concat", "-safe 0"])
-        .outputOptions([
-          "-c copy"
-        ])
+        .outputOptions(["-c copy"])
         .save(finalPath)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    // 📤 send video
     res.sendFile(path.resolve(finalPath));
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Video generation failed" });
+    res.status(500).json({ error: "FAILED" });
   }
 });
 
-// 🚀 start server
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log("Server running on " + PORT);
-});
+app.listen(8080, () => console.log("Server running 🚀"));
