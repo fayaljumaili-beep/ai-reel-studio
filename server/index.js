@@ -6,131 +6,108 @@ import ffmpegPath from "ffmpeg-static";
 import fs from "fs";
 import path from "path";
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
+// ✅ FIXED CORS (IMPORTANT)
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
 
-// 🔥 helper: clean text for ffmpeg
-function safeText(text) {
-  return text
-    .replace(/'/g, "")
-    .replace(/"/g, "")
-    .replace(/:/g, "")
-    .replace(/\n/g, " ")
-    .slice(0, 80);
-}
+ffmpeg.setFfmpegPath(ffmpegPath);
 
-// 🔥 split script into scenes
-function splitScenes(script) {
-  const sentences = script.split(".");
-  return sentences.filter(s => s.trim().length > 10).slice(0, 6);
-}
+// 📁 temp folder
+const TEMP_DIR = "temp";
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
+// 🎬 generate endpoint
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, length = "60" } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "No prompt" });
+    // 🎯 duration logic
+    let duration = 60;
+    if (length === "30") duration = 30;
+    if (length === "90") duration = 90;
+
+    // 🎬 scenes (3–5 scenes)
+    const sceneCount = 4;
+    const sceneDuration = Math.floor(duration / sceneCount);
+
+    // 🔥 fetch images (placeholder free API)
+    const imageUrls = [];
+    for (let i = 0; i < sceneCount; i++) {
+      imageUrls.push(`https://picsum.photos/1080/1920?random=${Date.now()}${i}`);
     }
 
-    // 🎯 fake script generator (replace later with GPT)
-    const script = `
-    ${prompt} is something most people ignore.
-    But this is why you are still stuck.
-    The difference between success and failure is simple.
-    Discipline beats motivation every time.
-    If you understand this, everything changes.
-    Start now before it's too late.
-    `;
+    // 📥 download images
+    const imagePaths = [];
+    for (let i = 0; i < imageUrls.length; i++) {
+      const imgPath = path.join(TEMP_DIR, `img${i}.jpg`);
+      const response = await fetch(imageUrls[i]);
+      const buffer = await response.arrayBuffer();
+      fs.writeFileSync(imgPath, Buffer.from(buffer));
+      imagePaths.push(imgPath);
+    }
 
-    const scenes = splitScenes(script);
+    // 🎬 create scene videos
+    const sceneVideos = [];
 
-    if (!fs.existsSync("temp")) fs.mkdirSync("temp");
-
-    let videoParts = [];
-
-    for (let i = 0; i < scenes.length; i++) {
-      const scenePath = `temp/scene${i}.mp4`;
-
-      // 🎬 fetch image
-      const imgRes = await fetch(
-        `https://api.pexels.com/v1/search?query=${prompt}&per_page=1`,
-        {
-          headers: {
-            Authorization: process.env.PEXELS_API_KEY
-          }
-        }
-      );
-
-      const imgData = await imgRes.json();
-      const imageUrl =
-        imgData.photos?.[0]?.src?.landscape ||
-        "https://images.pexels.com/photos/11035371/pexels-photo-11035371.jpeg";
-
-      const imgBuffer = await fetch(imageUrl).then(r => r.buffer());
-      const imgPath = `temp/img${i}.jpg`;
-      fs.writeFileSync(imgPath, imgBuffer);
-
-      const text = safeText(scenes[i]);
+    for (let i = 0; i < imagePaths.length; i++) {
+      const scenePath = path.join(TEMP_DIR, `scene${i}.mp4`);
 
       await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(imgPath)
-          .loop(1)
-          ..videoFilters([
-  "scale=1280:720",
-
-  `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:
-   text='${safeText(scenes[i])}':
-   fontcolor=white:
-   fontsize=42:
-   box=1:
-   boxcolor=black@0.7:
-   boxborderw=15:
-   x=(w-text_w)/2:
-   y=(h-text_h)/2`
-])
-          .outputOptions("-t 5")
+        ffmpeg(imagePaths[i])
+          .loop(sceneDuration)
+          .outputOptions([
+            "-vf scale=1080:1920",
+            "-t " + sceneDuration,
+            "-r 30"
+          ])
           .save(scenePath)
           .on("end", resolve)
           .on("error", reject);
       });
 
-      videoParts.push(scenePath);
+      sceneVideos.push(scenePath);
     }
 
-    // 🎬 CONCAT ALL SCENES
-    const listPath = "temp/list.txt";
-    fs.writeFileSync(
-      listPath,
-      videoParts.map(v => `file '${path.resolve(v)}'`).join("\n")
-    );
+    // 📄 concat file
+    const concatFile = path.join(TEMP_DIR, "concat.txt");
+    const concatContent = sceneVideos
+      .map(v => `file '${path.resolve(v)}'`)
+      .join("\n");
 
-    const finalVideo = "temp/final.mp4";
+    fs.writeFileSync(concatFile, concatContent);
+
+    // 🎥 final video
+    const finalPath = path.join(TEMP_DIR, "final.mp4");
 
     await new Promise((resolve, reject) => {
       ffmpeg()
-        .input(listPath)
+        .input(concatFile)
         .inputOptions(["-f concat", "-safe 0"])
-        .outputOptions(["-c copy"])
-        .save(finalVideo)
+        .outputOptions([
+          "-c copy"
+        ])
+        .save(finalPath)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    // 🎉 SEND VIDEO
-    res.sendFile(path.resolve(finalVideo));
+    // 📤 send video
+    res.sendFile(path.resolve(finalPath));
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Video generation failed" });
   }
 });
 
+// 🚀 start server
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+  console.log("Server running on " + PORT);
 });
