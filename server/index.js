@@ -11,7 +11,8 @@ const PORT = process.env.PORT || 8080;
 
 app.post("/generate-video", async (req, res) => {
 try {
-const { text = "how to become successful", duration = 6 } = req.body;
+const text = req.body.text || "how to become successful";
+const duration = req.body.duration || 6;
 
 ```
 const imagePath = path.join(__dirname, "assets/image.jpg");
@@ -24,35 +25,38 @@ const hook = "MAKE MONEY FAST";
 
 let filters = [];
 
-// 🎥 Smooth zoom
+// zoom
 filters.push("zoompan=z='min(zoom+0.0005,1.2)':d=125");
 
-// 🧠 Hook (FIXED QUOTES)
+// hook (TOP)
 filters.push(
-  `drawtext=text='${hook.replace(/'/g, "")}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`
+  "drawtext=text='" + hook.replace(/'/g, "") + "':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80"
 );
 
-// 💬 Word-by-word
+// words
 words.forEach((word, i) => {
   const start = (i * wordDuration).toFixed(2);
   const end = ((i + 1) * wordDuration).toFixed(2);
 
   filters.push(
-    `drawtext=text='${word.replace(/'/g, "")}':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h/2):enable='between(t,${start},${end})'`
+    "drawtext=text='" + word.replace(/'/g, "") +
+    "':fontcolor=white:fontsize=70:x=(w-text_w)/2:y=(h/2):enable='between(t," +
+    start + "," + end + ")'"
   );
 });
 
-// 📌 Bottom text
+// bottom subtitle
 filters.push(
-  `drawtext=text='${text.replace(/'/g, "")}':fontcolor=cyan:fontsize=40:x=(w-text_w)/2:y=h-120`
+  "drawtext=text='" + text.replace(/'/g, "") +
+  "':fontcolor=cyan:fontsize=40:x=(w-text_w)/2:y=h-120"
 );
 
 ffmpeg()
   .input(imagePath)
   .loop(duration)
   .outputOptions([
-    `-t ${duration}`,
-    `-vf ${filters.join(",")}`,
+    "-t " + duration,
+    "-vf " + filters.join(","),
     "-pix_fmt yuv420p",
     "-c:v libx264"
   ])
