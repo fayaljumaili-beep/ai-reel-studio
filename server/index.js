@@ -3,159 +3,100 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const TEMP_DIR = "temp";
-
-if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR);
+// ensure temp folder exists
+if (!fs.existsSync("temp")) {
+  fs.mkdirSync("temp");
 }
 
-// -----------------------------
-// 🎯 SIMPLE AI SCENE MAPPER
-// -----------------------------
-function getScenesFromPrompt(prompt) {
-  const p = prompt.toLowerCase();
+// 🔥 DOWNLOAD FUNCTION (FIXES YOUR ERROR)
+async function downloadVideo(url, outputPath) {
+  const res = await fetch(url);
 
-  if (p.includes("rich") || p.includes("money") || p.includes("success")) {
-    return [
-      "https://videos.pexels.com/video-files/3209299/3209299-uhd_2560_1440_25fps.mp4",
-      "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4",
-      "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4"
-    ];
+  if (!res.ok) {
+    throw new Error("❌ Failed to download video");
   }
 
-  if (p.includes("fitness") || p.includes("gym")) {
-    return [
-      "https://videos.pexels.com/video-files/1552249/1552249-hd_1280_720_25fps.mp4",
-      "https://videos.pexels.com/video-files/4761779/4761779-hd_1280_720_25fps.mp4"
-    ];
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  // 🚨 CRITICAL FIX
+  if (buffer.length < 10000) {
+    throw new Error("❌ Invalid video (too small)");
   }
 
-  // fallback
-  return [
-    "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4",
-    "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4"
-  ];
+  fs.writeFileSync(outputPath, buffer);
+  console.log("✅ Saved:", outputPath);
 }
 
+// 🎬 MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, duration = 30 } = req.body;
+    console.log("🔥 Request received");
 
-    console.log("🎬 Generating video:", prompt);
+    const { prompt } = req.body;
 
-    const scenes = getScenesFromPrompt(prompt);
-
-    // -----------------------------
-    // AUDIO
-    // -----------------------------
-    const audioUrl =
-      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
-
-    const audioPath = path.join(TEMP_DIR, "audio.mp3");
-
-    const audioRes = await fetch(audioUrl);
-    const audioBuffer = await audioRes.buffer();
-    fs.writeFileSync(audioPath, audioBuffer);
-
-    // -----------------------------
-    // DOWNLOAD VIDEOS
-    // -----------------------------
-    const videoPaths = [];
-
-    for (let i = 0; i < scenes.length; i++) {
-      const filePath = path.join(TEMP_DIR, `scene${i}.mp4`);
-
-      const response = await fetch(scenes[i]);
-      const buffer = await response.buffer();
-
-      fs.writeFileSync(filePath, buffer);
-      videoPaths.push(filePath);
-    }
-
-    // -----------------------------
-    // CUT SCENES BASED ON DURATION
-    // -----------------------------
-    const segmentDuration = Math.floor(duration / videoPaths.length);
-
-    const clippedVideos = [];
-
-    for (let i = 0; i < videoPaths.length; i++) {
-      const input = videoPaths[i];
-      const output = path.join(TEMP_DIR, `clip_${i}.mp4`);
-
-      await new Promise((resolve, reject) => {
-        ffmpeg(input)
-          .setStartTime(0)
-          .duration(segmentDuration)
-          .outputOptions([
-            "-c:v libx264",
-            "-preset veryfast",
-            "-pix_fmt yuv420p"
-          ])
-          .save(output)
-          .on("end", resolve)
-          .on("error", reject);
-      });
-
-      clippedVideos.push(output);
-    }
-
-    // -----------------------------
-    // CONCAT
-    // -----------------------------
-    const concatFile = path.join(TEMP_DIR, "concat.txt");
-
-    fs.writeFileSync(
-      concatFile,
-      clippedVideos.map(v => `file '${path.resolve(v)}'`).join("\n")
+    // 🔥 GET VIDEO FROM PEXELS
+    const response = await fetch(
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
+        prompt
+      )}&per_page=1`,
+      {
+        headers: {
+          Authorization: process.env.PEXELS_API_KEY,
+        },
+      }
     );
 
-    const mergedPath = path.join(TEMP_DIR, "merged.mp4");
+    const data = await response.json();
 
+    if (!data.videos || data.videos.length === 0) {
+      throw new Error("❌ No videos found");
+    }
+
+    // 🔥 GET VALID MP4
+    const videoUrl =
+      data.videos[0].video_files.find(
+        (v) => v.file_type === "video/mp4"
+      )?.link;
+
+    if (!videoUrl) {
+      throw new Error("❌ No valid MP4 found");
+    }
+
+    const scenePath = "temp/scene1.mp4";
+
+    // 🔥 DOWNLOAD VIDEO (FIXED)
+    await downloadVideo(videoUrl, scenePath);
+
+    // 🔥 SAFETY CHECK
+    if (!fs.existsSync(scenePath)) {
+      throw new Error("❌ Scene file missing");
+    }
+
+    const finalPath = "temp/output.mp4";
+
+    // 🎬 PROCESS VIDEO (SIMPLE + SAFE)
     await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(concatFile)
-        .inputOptions(["-f concat", "-safe 0"])
+      ffmpeg(scenePath)
         .outputOptions([
           "-c:v libx264",
           "-preset veryfast",
-          "-pix_fmt yuv420p"
-        ])
-        .save(mergedPath)
-        .on("end", resolve)
-        .on("error", reject);
-    });
-
-    // -----------------------------
-    // ADD AUDIO
-    // -----------------------------
-    const finalPath = path.join(TEMP_DIR, "final.mp4");
-
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(mergedPath)
-        .input(audioPath)
-        .outputOptions([
-          "-c:v copy",
+          "-pix_fmt yuv420p",
           "-c:a aac",
           "-shortest",
-          `-t ${duration}`
         ])
         .save(finalPath)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    console.log("✅ FINAL READY");
+    console.log("✅ Video ready");
 
     res.sendFile(path.resolve(finalPath));
-
   } catch (err) {
     console.error("❌ ERROR:", err);
     res.status(500).json({ error: "FAILED" });
@@ -163,5 +104,5 @@ app.post("/generate-video", async (req, res) => {
 });
 
 app.listen(8080, () => {
-  console.log("🚀 Server running on 8080");
+  console.log("🚀 Server running on port 8080");
 });
