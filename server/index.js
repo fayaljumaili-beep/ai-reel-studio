@@ -7,7 +7,7 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// ✅ VERY IMPORTANT (fixes req.body undefined)
+// middleware
 app.use(express.json());
 app.use(cors());
 
@@ -23,21 +23,26 @@ app.get("/", (req, res) => {
 
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("BODY:", req.body); // 👈 DEBUG
+    console.log("BODY:", req.body);
 
-    const { prompt, duration } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    // default duration
-    const videoDuration = 8; // force lightweight render
+    // 🔥 FORCE LOW MEMORY (important for Railway)
+    const videoDuration = 8;
 
-    // clean text for ffmpeg (VERY IMPORTANT)
+    // clean text for ffmpeg
     const safeText = prompt.replace(/'/g, "").replace(/:/g, "");
 
-    // delete old file if exists
+    // ✅ FIXED: filters defined
+    const filters = [
+      `drawtext=text='${safeText}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`
+    ];
+
+    // delete old output if exists
     if (fs.existsSync(outputPath)) {
       fs.unlinkSync(outputPath);
     }
@@ -47,17 +52,17 @@ app.post("/generate-video", async (req, res) => {
       .loop(videoDuration)
       .input(audioPath)
       .outputOptions([
-  "-t " + videoDuration,
-  "-vf " + filters.join(","),
-  "-pix_fmt yuv420p",
-  "-c:v libx264",
-  "-preset ultrafast",
-  "-crf 32",
-  "-s 720x1280",
-  "-c:a aac",
-  "-b:a 96k",
-  "-shortest"
-])
+        "-t " + videoDuration,
+        "-vf " + filters.join(","),
+        "-pix_fmt yuv420p",
+        "-c:v libx264",
+        "-preset ultrafast",
+        "-crf 32",
+        "-s 720x1280",
+        "-c:a aac",
+        "-b:a 96k",
+        "-shortest"
+      ])
       .save(outputPath)
       .on("end", () => {
         console.log("✅ VIDEO READY");
@@ -65,15 +70,15 @@ app.post("/generate-video", async (req, res) => {
       })
       .on("error", (err) => {
         console.error("FFMPEG ERROR:", err);
-        res.status(500).json({ error: "ffmpeg failed" });
+        res.status(500).json({ error: "Video generation failed" });
       });
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    res.status(500).json({ error: "server error" });
+    res.status(500).json({ error: "Server crashed" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log(`Server running on port ${PORT}`);
 });
