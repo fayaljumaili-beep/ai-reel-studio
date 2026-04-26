@@ -10,21 +10,17 @@ app.use(express.json());
 
 const TEMP_DIR = path.join(process.cwd(), "temp");
 
-// ensure temp folder exists
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR);
 }
 
-// 🔥 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    console.log("🎬 Generating video...");
 
-    console.log("🎬 Generating video for:", prompt);
-
-    // 🧩 FAKE SCENES (for now — replace later with real clips)
     const sceneVideos = [];
 
+    // 🔥 SIMPLE VIDEO SCENES (NO TEXT FILTER)
     for (let i = 0; i < 3; i++) {
       const scenePath = path.join(TEMP_DIR, `scene${i}.mp4`);
 
@@ -33,7 +29,6 @@ app.post("/generate-video", async (req, res) => {
           .input("color=c=black:s=720x1280:d=2")
           .inputFormat("lavfi")
           .outputOptions([
-            "-vf drawtext=text='Scene " + (i + 1) + "':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-text_h)/2",
             "-c:v libx264",
             "-t 2",
             "-pix_fmt yuv420p"
@@ -46,7 +41,7 @@ app.post("/generate-video", async (req, res) => {
       sceneVideos.push(scenePath);
     }
 
-    // 🧾 CREATE CONCAT FILE
+    // 🧾 CONCAT FILE
     const concatFile = path.join(TEMP_DIR, "concat.txt");
 
     const concatContent = sceneVideos
@@ -55,7 +50,7 @@ app.post("/generate-video", async (req, res) => {
 
     fs.writeFileSync(concatFile, concatContent);
 
-    // 🎥 FINAL OUTPUT
+    // 🎥 FINAL VIDEO
     const finalPath = path.join(TEMP_DIR, "final.mp4");
 
     await new Promise((resolve, reject) => {
@@ -74,7 +69,7 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    console.log("✅ Video ready:", finalPath);
+    console.log("✅ Video ready");
 
     res.sendFile(path.resolve(finalPath));
 
