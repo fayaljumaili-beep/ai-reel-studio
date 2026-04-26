@@ -8,42 +8,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ensure temp folder exists
 if (!fs.existsSync("temp")) {
   fs.mkdirSync("temp");
 }
 
-// 🔥 DOWNLOAD FUNCTION (FIXES YOUR ERROR)
+// DOWNLOAD FUNCTION
 async function downloadVideo(url, outputPath) {
   const res = await fetch(url);
 
-  if (!res.ok) {
-    throw new Error("❌ Failed to download video");
-  }
+  if (!res.ok) throw new Error("Download failed");
 
   const buffer = Buffer.from(await res.arrayBuffer());
 
-  // 🚨 CRITICAL FIX
   if (buffer.length < 10000) {
-    throw new Error("❌ Invalid video (too small)");
+    throw new Error("Invalid video");
   }
 
   fs.writeFileSync(outputPath, buffer);
-  console.log("✅ Saved:", outputPath);
 }
 
-// 🎬 MAIN ROUTE
+// MAIN
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("🔥 Request received");
+    const { prompt, duration = 30 } = req.body;
 
-    const { prompt } = req.body;
+    console.log("🎬 Generating:", prompt);
 
-    // 🔥 GET VIDEO FROM PEXELS
+    // how many clips (each ~5s)
+    const clipsNeeded = Math.ceil(duration / 5);
+
     const response = await fetch(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
-        prompt
-      )}&per_page=1`,
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(prompt)}&per_page=${clipsNeeded}`,
       {
         headers: {
           Authorization: process.env.PEXELS_API_KEY,
@@ -54,47 +49,58 @@ app.post("/generate-video", async (req, res) => {
     const data = await response.json();
 
     if (!data.videos || data.videos.length === 0) {
-      throw new Error("❌ No videos found");
+      throw new Error("No videos found");
     }
 
-    // 🔥 GET VALID MP4
-    const videoUrl =
-      data.videos[0].video_files.find(
+    let scenePaths = [];
+
+    // 🔥 DOWNLOAD MULTIPLE CLIPS
+    for (let i = 0; i < clipsNeeded; i++) {
+      const video = data.videos[i];
+
+      const videoUrl = video.video_files.find(
         (v) => v.file_type === "video/mp4"
       )?.link;
 
-    if (!videoUrl) {
-      throw new Error("❌ No valid MP4 found");
+      if (!videoUrl) continue;
+
+      const filePath = `temp/scene${i}.mp4`;
+
+      await downloadVideo(videoUrl, filePath);
+
+      scenePaths.push(filePath);
     }
 
-    const scenePath = "temp/scene1.mp4";
-
-    // 🔥 DOWNLOAD VIDEO (FIXED)
-    await downloadVideo(videoUrl, scenePath);
-
-    // 🔥 SAFETY CHECK
-    if (!fs.existsSync(scenePath)) {
-      throw new Error("❌ Scene file missing");
+    if (scenePaths.length === 0) {
+      throw new Error("No valid clips downloaded");
     }
+
+    // 🔥 CREATE CONCAT FILE
+    const concatFile = "temp/concat.txt";
+    fs.writeFileSync(
+      concatFile,
+      scenePaths.map((p) => `file '${path.resolve(p)}'`).join("\n")
+    );
 
     const finalPath = "temp/output.mp4";
 
-    // 🎬 PROCESS VIDEO (SIMPLE + SAFE)
+    // 🔥 CONCAT VIDEOS
     await new Promise((resolve, reject) => {
-      ffmpeg(scenePath)
+      ffmpeg()
+        .input(concatFile)
+        .inputOptions(["-f concat", "-safe 0"])
         .outputOptions([
           "-c:v libx264",
           "-preset veryfast",
           "-pix_fmt yuv420p",
           "-c:a aac",
-          "-shortest",
         ])
         .save(finalPath)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    console.log("✅ Video ready");
+    console.log("✅ Multi-scene video ready");
 
     res.sendFile(path.resolve(finalPath));
   } catch (err) {
@@ -104,5 +110,5 @@ app.post("/generate-video", async (req, res) => {
 });
 
 app.listen(8080, () => {
-  console.log("🚀 Server running on port 8080");
+  console.log("🚀 Server running on 8080");
 });
