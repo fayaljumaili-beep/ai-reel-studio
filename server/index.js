@@ -1,164 +1,143 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
-import { fileURLToPath } from "url";
 import OpenAI from "openai";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const __dirname = new URL(".", import.meta.url).pathname;
 
 // ===============================
-// DOWNLOAD FILE
+// 🎤 GENERATE AI VOICE
 // ===============================
-async function downloadFile(url, outputPath) {
-  const res = await fetch(url);
-  const buffer = await res.arrayBuffer();
-  fs.writeFileSync(outputPath, Buffer.from(buffer));
-}
+async function generateVoice(script) {
+  const filePath = path.join(__dirname, "voice.mp3");
 
-// ===============================
-// GET VIDEOS FROM PEXELS
-// ===============================
-async function getPexelsVideos(query, count = 6) {
-  const res = await fetch(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=${count}`,
-    {
-      headers: {
-        Authorization: process.env.PEXELS_API_KEY,
-      },
-    }
-  );
-
-  const data = await res.json();
-
-  return data.videos.map((v, i) => ({
-    url: v.video_files[0].link,
-    file: path.join(__dirname, `scene_${i}.mp4`),
-  }));
-}
-
-// ===============================
-// GENERATE SCRIPT
-// ===============================
-async function generateScript(prompt) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "Write a short, punchy motivational TikTok script under 90 seconds. Use short impactful lines.",
-      },
-      { role: "user", content: prompt },
-    ],
-  });
-
-  return completion.choices[0].message.content;
-}
-
-// ===============================
-// GENERATE VOICE
-// ===============================
-async function generateVoice(text) {
   const response = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
     voice: "alloy",
-    input: text,
+    input: script,
   });
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  const filePath = path.join(__dirname, "voice.mp3");
-
   fs.writeFileSync(filePath, buffer);
 
   return filePath;
 }
 
 // ===============================
-// MAIN ROUTE
+// 🧠 WORD TIMESTAMPS
+// ===============================
+async function getWordTimestamps(audioPath) {
+  const res = await openai.audio.transcriptions.create({
+    file: fs.createReadStream(audioPath),
+    model: "gpt-4o-transcribe",
+    response_format: "verbose_json",
+  });
+
+  return res.words || [];
+}
+
+// ===============================
+// 🛡️ ESCAPE TEXT FOR FFMPEG
+// ===============================
+function escapeText(text) {
+  return text
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'")
+    .replace(/,/g, "\\,")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
+
+// ===============================
+// 🎬 BUILD WORD-BY-WORD CAPTIONS
+// ===============================
+function buildDrawtextFilter(words) {
+  return words
+    .map((w) => {
+      const word = escapeText(w.word);
+
+      return `drawtext=text='${word}':fontcolor=white:fontsize=48:borderw=2:bordercolor=black:x=(w-text_w)/2:y=(h-200):enable='between(t,${w.start},${w.end})'`;
+    })
+    .join(",");
+}
+
+// ===============================
+// 🎬 GENERATE VIDEO
 // ===============================
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, duration = 60 } = req.body;
 
-    console.log("🎬 Generating:", prompt);
-
-    // 1. SCRIPT + VOICE
-    const script = await generateScript(prompt);
-    const voicePath = await generateVoice(script);
-
-    console.log("🧠 Script:", script);
-
-    // 2. DOWNLOAD VIDEOS
-    const videos = await getPexelsVideos(prompt);
-
-    for (const v of videos) {
-      await downloadFile(v.url, v.file);
-    }
-
-    // 3. CONCAT FILE
-    const concatFile = path.join(__dirname, "concat.txt");
-
-    fs.writeFileSync(
-      concatFile,
-      videos.map((v) => `file '${v.file}'`).join("\n")
-    );
-
-    // 4. MERGE VIDEO
-    const mergedVideo = path.join(__dirname, "merged.mp4");
-
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(concatFile)
-        .inputOptions(["-f concat", "-safe 0"])
-        .outputOptions(["-c copy"])
-        .save(mergedVideo)
-        .on("end", resolve)
-        .on("error", reject);
+    // 1️⃣ Generate script
+    const scriptRes = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: `Create a viral short-form video script (~${duration}s) about: ${prompt}`,
+        },
+      ],
     });
 
-    // 5. ADD AUDIO (FIXED ✅)
-    const finalVideo = path.join(__dirname, "final.mp4");
-    const musicPath = path.join(__dirname, "assets/music.mp3");
+    const script = scriptRes.choices[0].message.content;
 
+    console.log("🧠 SCRIPT:", script);
+
+    // 2️⃣ Voice
+    const voicePath = await generateVoice(script);
+
+    // 3️⃣ Word timestamps
+    const words = await getWordTimestamps(voicePath);
+
+    console.log("📝 WORDS SAMPLE:", words.slice(0, 5));
+
+    // 4️⃣ Build caption filter
+    const textFilter = buildDrawtextFilter(words);
+
+    // 5️⃣ Paths
+    const imagePath = path.join(__dirname, "image.jpg");
+    const musicPath = path.join(__dirname, "assets/music.mp3");
+    const outputVideo = path.join(__dirname, "final.mp4");
+
+    // 6️⃣ FFmpeg
     await new Promise((resolve, reject) => {
-      ffmpeg(mergedVideo)
+      ffmpeg()
+        .input(imagePath)
+        .loop(duration)
         .input(voicePath)
         .input(musicPath)
         .complexFilter([
           "[1:a]volume=1[a1]",
-          "[2:a]volume=0.3[a2]",
+          "[2:a]volume=0.25[a2]",
           "[a1][a2]amix=inputs=2:duration=longest[aout]",
         ])
+        .videoFilters(textFilter)
         .outputOptions([
           "-map 0:v",
           "-map [aout]",
+          "-t " + duration,
           "-shortest",
         ])
-        .save(finalVideo)
+        .save(outputVideo)
         .on("end", resolve)
         .on("error", reject);
     });
 
-    // 6. RETURN VIDEO
-    res.sendFile(finalVideo);
-
+    // 7️⃣ Send video
+    res.sendFile(outputVideo);
   } catch (err) {
-    console.error("❌ FULL ERROR:", err);
+    console.error("🔥 FULL ERROR:", err);
     res.status(500).json({ error: err.message || "FAILED" });
   }
 });
