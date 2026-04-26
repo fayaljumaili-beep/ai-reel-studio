@@ -35,12 +35,16 @@ app.post("/generate-video", async (req, res) => {
 
     // ✅ VERY SAFE text (this is key)
     const safeText = prompt
-      .replace(/[^a-zA-Z0-9 ]/g, "") // remove ALL risky chars
-      .substring(0, 60); // limit length
+  .replace(/:/g, '\\:')
+  .replace(/'/g, "\\'")
+  .replace(/,/g, '')
+  .replace(/\n/g, ' ')
+  .trim();
 
     // ✅ NO quotes → avoids FFmpeg parsing bugs
-    const filter = `drawtext=text=${safeText}:fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=80`;
-
+    const filters = [
+  `drawtext=text='${safeText}':fontcolor=yellow:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2`
+];
     // delete old output
     if (fs.existsSync(outputPath)) {
       fs.unlinkSync(outputPath);
@@ -51,17 +55,17 @@ app.post("/generate-video", async (req, res) => {
       .loop(videoDuration)
       .input(audioPath)
       .outputOptions([
-        "-t", String(videoDuration),
-        "-vf", filter,
-        "-pix_fmt", "yuv420p",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "32",
-        "-s", "720x1280",
-        "-c:a", "aac",
-        "-b:a", "96k",
-        "-shortest"
-      ])
+  "-t " + videoDuration,
+  "-vf", filters.join(","),
+  "-pix_fmt yuv420p",
+  "-c:v libx264",
+  "-preset ultrafast",
+  "-crf 32",
+  "-s 720x1280",
+  "-c:a aac",
+  "-b:a 96k",
+  "-shortest"
+])
       .save(outputPath)
       .on("end", () => {
         console.log("✅ VIDEO READY");
