@@ -15,22 +15,44 @@ if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR);
 }
 
+// -----------------------------
+// 🎯 SIMPLE AI SCENE MAPPER
+// -----------------------------
+function getScenesFromPrompt(prompt) {
+  const p = prompt.toLowerCase();
+
+  if (p.includes("rich") || p.includes("money") || p.includes("success")) {
+    return [
+      "https://videos.pexels.com/video-files/3209299/3209299-uhd_2560_1440_25fps.mp4",
+      "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4",
+      "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4"
+    ];
+  }
+
+  if (p.includes("fitness") || p.includes("gym")) {
+    return [
+      "https://videos.pexels.com/video-files/1552249/1552249-hd_1280_720_25fps.mp4",
+      "https://videos.pexels.com/video-files/4761779/4761779-hd_1280_720_25fps.mp4"
+    ];
+  }
+
+  // fallback
+  return [
+    "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4",
+    "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4"
+  ];
+}
+
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt, duration = 30 } = req.body;
 
     console.log("🎬 Generating video:", prompt);
 
-    // -----------------------------
-    // VIDEO SOURCES
-    // -----------------------------
-    const scenes = [
-      "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4",
-      "https://videos.pexels.com/video-files/855564/855564-hd_1280_720_25fps.mp4"
-    ];
+    const scenes = getScenesFromPrompt(prompt);
 
     // -----------------------------
-    // AUDIO (royalty-free sample)
+    // AUDIO
     // -----------------------------
     const audioUrl =
       "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
@@ -57,25 +79,45 @@ app.post("/generate-video", async (req, res) => {
     }
 
     // -----------------------------
-    // LOOP VIDEOS (MAKE LONGER)
+    // CUT SCENES BASED ON DURATION
     // -----------------------------
-    const loopedList = [];
-    for (let i = 0; i < 10; i++) {
-      loopedList.push(...videoPaths);
+    const segmentDuration = Math.floor(duration / videoPaths.length);
+
+    const clippedVideos = [];
+
+    for (let i = 0; i < videoPaths.length; i++) {
+      const input = videoPaths[i];
+      const output = path.join(TEMP_DIR, `clip_${i}.mp4`);
+
+      await new Promise((resolve, reject) => {
+        ffmpeg(input)
+          .setStartTime(0)
+          .duration(segmentDuration)
+          .outputOptions([
+            "-c:v libx264",
+            "-preset veryfast",
+            "-pix_fmt yuv420p"
+          ])
+          .save(output)
+          .on("end", resolve)
+          .on("error", reject);
+      });
+
+      clippedVideos.push(output);
     }
 
+    // -----------------------------
+    // CONCAT
+    // -----------------------------
     const concatFile = path.join(TEMP_DIR, "concat.txt");
 
     fs.writeFileSync(
       concatFile,
-      loopedList.map(v => `file '${path.resolve(v)}'`).join("\n")
+      clippedVideos.map(v => `file '${path.resolve(v)}'`).join("\n")
     );
 
     const mergedPath = path.join(TEMP_DIR, "merged.mp4");
 
-    // -----------------------------
-    // CONCAT VIDEOS
-    // -----------------------------
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(concatFile)
@@ -90,11 +132,11 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
+    // -----------------------------
+    // ADD AUDIO
+    // -----------------------------
     const finalPath = path.join(TEMP_DIR, "final.mp4");
 
-    // -----------------------------
-    // ADD AUDIO + TRIM TO DURATION
-    // -----------------------------
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(mergedPath)
@@ -110,7 +152,7 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    console.log("✅ FINAL VIDEO READY");
+    console.log("✅ FINAL READY");
 
     res.sendFile(path.resolve(finalPath));
 
