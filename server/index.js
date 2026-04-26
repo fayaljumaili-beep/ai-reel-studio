@@ -89,9 +89,9 @@ app.post("/generate-video", async (req, res) => {
     const musicPath = "temp/music.mp3";
 
     await downloadFile(
-      "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      musicPath
-    );
+  "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=upbeat-pop-113997.mp3",
+  musicPath
+);
 
     const finalPath = "temp/output.mp4";
 
