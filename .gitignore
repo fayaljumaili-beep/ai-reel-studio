@@ -1,33 +1,90 @@
-# logs
+# -------------------------
+
+# Logs
+
+# -------------------------
 
 logs
 *.log
 yarn-error.log*
 pnpm-debug.log*
 
+# -------------------------
+
+# Node
+
+# -------------------------
+
 node_modules/
-# env
 
+# -------------------------
+
+# Environment (SECRETS)
+
+# -------------------------
+
+.env
 .env*
+!.env.example
 
-# vercel
+# -------------------------
+
+# Build / Output
+
+# -------------------------
+
+.next
+dist
+build
+output*
+
+# -------------------------
+
+# Generated media (VERY IMPORTANT)
+
+# -------------------------
+
+*.mp4
+*.mp3
+clip-*.mp4
+voice.mp3
+output.mp4
+
+# -------------------------
+
+# Video / assets folders
+
+# -------------------------
+
+assets/videos/
+server/assets/videos/
+
+# keep folder structure if needed
+
+!server/assets/videos/.keep
+
+# -------------------------
+
+# Vercel / deployment
+
+# -------------------------
 
 .vercel
 
-# typescript
+# -------------------------
+
+# TypeScript
+
+# -------------------------
 
 *.tsbuildinfo
 next-env.d.ts
 
-# build / output
+# -------------------------
 
-.next
-output*
+# OS junk
 
-# videos (ignore ALL by default)
+# -------------------------
 
-*.mp4
-
-# ✅ BUT allow server videos (IMPORTANT)
-
-!server/*.mp4
+.DS_Store
+Thumbs.db
