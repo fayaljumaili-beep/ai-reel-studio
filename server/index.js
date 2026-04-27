@@ -4,6 +4,10 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { fileURLToPath } from "url";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +16,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// helper to run ffmpeg
+// 🔧 helper to run ffmpeg
 function runCommand(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
@@ -26,6 +30,33 @@ function runCommand(cmd) {
   });
 }
 
+// 🎬 GET STOCK VIDEO FROM PEXELS
+async function getStockVideo(query) {
+  const res = await fetch(
+    `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=5`,
+    {
+      headers: {
+        Authorization: process.env.PEXELS_API_KEY,
+      },
+    }
+  );
+
+  const data = await res.json();
+
+  if (!data.videos || data.videos.length === 0) {
+    throw new Error("No videos found");
+  }
+
+  const video = data.videos[Math.floor(Math.random() * data.videos.length)];
+
+  const file =
+    video.video_files.find((v) => v.quality === "sd") ||
+    video.video_files[0];
+
+  return file.link;
+}
+
+// 🚀 MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
     const { text, style, aesthetic, duration, voice } = req.body;
@@ -36,12 +67,11 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🎬 Request:", { text, style, aesthetic, duration, voice });
 
-    // paths
     const tempVideo = path.join(__dirname, "temp.mp4");
     const captionsPath = path.join(__dirname, "captions.srt");
     const outputVideo = path.join(__dirname, "output.mp4");
 
-    // simple placeholder captions
+    // 📝 captions
     const captionContent = `1
 00:00:00,000 --> 00:00:05,000
 ${text}
@@ -49,22 +79,24 @@ ${text}
 
     fs.writeFileSync(captionsPath, captionContent);
 
-    // sample video source (loop a static color if needed)
-    await runCommand(
-      `ffmpeg -y -f lavfi -i color=c=black:s=720x1280:d=5 -vf "drawtext=text='AI Reel Studio':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-text_h)/2" ${tempVideo}`
-    );
+    // 🎞️ fetch stock video
+    console.log("📥 Fetching stock video...");
+    const videoUrl = await getStockVideo(text);
 
-    // FIX: escape path for Linux
+    // download video
+    await runCommand(`curl -L "${videoUrl}" -o "${tempVideo}"`);
+
+    // fix subtitle path (linux)
     const safeCaptionsPath = captionsPath.replace(/:/g, "\\:");
 
-    // FINAL VIDEO BUILD (optimized to prevent "Killed")
+    // 🎬 build final video (OPTIMIZED)
     await runCommand(
-      `ffmpeg -y -i "${tempVideo}" -vf "scale=720:-2,subtitles=${safeCaptionsPath}" -preset ultrafast -crf 28 "${outputVideo}"`
+      `ffmpeg -y -i "${tempVideo}" -t 10 -vf "scale=720:-2,subtitles=${safeCaptionsPath}" -preset ultrafast -crf 28 "${outputVideo}"`
     );
 
     console.log("✅ Video created:", outputVideo);
 
-    // stream video (NO MORE 500s)
+    // 🚀 stream response
     res.setHeader("Content-Type", "video/mp4");
 
     const stream = fs.createReadStream(outputVideo);
