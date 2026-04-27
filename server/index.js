@@ -86,15 +86,15 @@ app.post("/generate-video", async (req, res) => {
 
     // 🔗 MERGE CLIPS
     await run(
-      `ffmpeg -y -f concat -safe 0 -i ${listPath} -c copy ${mergedPath}`
-    );
+  `ffmpeg -y -f concat -safe 0 -i ${listPath} -vf "scale=720:1280,setsar=1" -r 30 -c:v libx264 -preset veryfast -pix_fmt yuv420p -an ${mergedPath}`
+);
 
     // 🎵 GENERATE AUDIO (simple tone for now)
     const audioPath = path.join(TMP_DIR, "audio.mp3");
 
     await run(
-      `ffmpeg -y -f lavfi -i sine=frequency=440:duration=20 -q:a 9 ${audioPath}`
-    );
+  `ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 20 ${audioPath}`
+);
 
     const finalPath = path.join(TMP_DIR, "final.mp4");
 
