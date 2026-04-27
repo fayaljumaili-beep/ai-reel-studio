@@ -1,256 +1,177 @@
 import express from "express";
+import cors from "cors";
 import fetch from "node-fetch";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import OpenAI from "openai";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 import { fileURLToPath } from "url";
+import OpenAI from "openai";
 
 dotenv.config();
 
-const app = express();
-app.use(express.json());
-
-const PORT = 5000;
-
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
+// fix __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// setup ffmpeg
+ffmpeg.setFfmpegPath(ffmpegPath);
 
-// ==============================
-// 🎥 GET CLIPS FROM PEXELS
-// ==============================
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ✅ CORS FIX
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"]
+}));
+
+app.use(express.json());
+
+// =========================
+// OPENAI
+// =========================
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// =========================
+// GET CLIPS FROM PEXELS
+// =========================
 async function getClips(query) {
   const res = await fetch(
     `https://api.pexels.com/videos/search?query=${query}&per_page=3`,
     {
       headers: {
-        Authorization: process.env.PEXELS_API_KEY,
-      },
+        Authorization: process.env.PEXELS_API_KEY
+      }
     }
   );
 
   const data = await res.json();
 
-  return data.videos.map((video, i) => {
-    const file = video.video_files[0].link;
+  const clips = [];
+
+  for (let i = 0; i < data.videos.length; i++) {
+    const video = data.videos[i].video_files[0].link;
     const filePath = path.join(__dirname, `clip-${i}.mp4`);
-    return { url: file, path: filePath };
-  });
+
+    const response = await fetch(video);
+    const buffer = await response.buffer();
+
+    fs.writeFileSync(filePath, buffer);
+    clips.push(filePath);
+
+    console.log("📥 Downloaded:", filePath);
+  }
+
+  return clips;
 }
 
-
-// ==============================
-// ⬇️ DOWNLOAD FILE
-// ==============================
-async function downloadFile(url, outputPath) {
-  const res = await fetch(url);
-  const buffer = await res.arrayBuffer();
-  fs.writeFileSync(outputPath, Buffer.from(buffer));
-  console.log("⬇️ Downloaded:", outputPath);
-}
-
-
-// ==============================
-// 🎙 GENERATE VOICE
-// ==============================
+// =========================
+// GENERATE VOICE
+// =========================
 async function generateVoice(text) {
-  console.log("🎙 Generating voice...");
-
-  const response = await openai.audio.speech.create({
+  const speech = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
     voice: "alloy",
-    input: text,
+    input: text
   });
 
   const filePath = path.join(__dirname, "voice.mp3");
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const buffer = Buffer.from(await speech.arrayBuffer());
 
   fs.writeFileSync(filePath, buffer);
 
   console.log("🔊 Voice saved:", filePath);
+
   return filePath;
 }
 
-
-// ==============================
-// 🎬 BUILD VIDEO (FULL UPGRADE)
-// ==============================
+// =========================
+// BUILD VIDEO (VERTICAL + CLEAN FIX)
+// =========================
 async function buildVideo(clips, audioPath, outputPath) {
   return new Promise((resolve, reject) => {
-    console.log("🎬 Building viral video...");
+    console.log("🎬 Building video...");
 
     const command = ffmpeg();
 
-    // 🎥 add clips
+    // add inputs
     clips.forEach((clip) => command.input(clip));
-
-    // 🎙 voice
     command.input(audioPath);
 
-    // 🎵 optional music
-    const musicPath = path.join(__dirname, "music.mp3");
-    const hasMusic = fs.existsSync(musicPath);
-
-    if (hasMusic) {
-      command.input(musicPath);
-      console.log("🎵 Music detected");
-    }
-
-    const hook = "YOU'RE DOING THIS WRONG";
-    const caption = "SUCCESS IS A CHOICE";
-
-    const filters = [
-      // 🎥 concat clips
-      {
-        filter: "concat",
-        options: { n: clips.length, v: 1, a: 0 },
-        inputs: clips.map((_, i) => `[${i}:v]`),
-        outputs: "base",
-      },
-
-      // 📱 vertical format
-      {
-        filter: "scale",
-        options: "720:1280:force_original_aspect_ratio=decrease",
-        inputs: "base",
-        outputs: "scaled",
-      },
-      {
-        filter: "pad",
-        options: "720:1280:(ow-iw)/2:(oh-ih)/2",
-        inputs: "scaled",
-        outputs: "padded",
-      },
-
-      // 🔥 hook (top, first 2 sec)
-      {
-        filter: "drawtext",
-        options: {
-          text: hook,
-          fontsize: 50,
-          fontcolor: "white",
-          x: "(w-text_w)/2",
-          y: "80",
-          box: 1,
-          boxcolor: "black@0.6",
-          boxborderw: 20,
-          enable: "lt(t,2)",
-        },
-        inputs: "padded",
-        outputs: "hooked",
-      },
-
-      // 🧠 caption (bottom)
-      {
-        filter: "drawtext",
-        options: {
-          text: caption,
-          fontsize: 60,
-          fontcolor: "white",
-          x: "(w-text_w)/2",
-          y: "h-150",
-          box: 1,
-          boxcolor: "black@0.5",
-          boxborderw: 20,
-        },
-        inputs: "hooked",
-        outputs: "vout",
-      },
-    ];
-
-    // 🎵 AUDIO MIX
-    const voiceIndex = clips.length;
-    const musicIndex = clips.length + 1;
-
-    if (hasMusic) {
-      filters.push({
-        filter: "amix",
-        options: {
-          inputs: 2,
-          duration: "shortest",
-        },
-        inputs: [`[${voiceIndex}:a]`, `[${musicIndex}:a]`],
-        outputs: "aout",
-      });
-    }
+    // FIXED FILTER (no index errors)
+    const filter = `
+      ${clips.map((_, i) => `[${i}:v]scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2[v${i}]`).join(";")}
+      ${clips.map((_, i) => `[v${i}]`).join("")}
+      concat=n=${clips.length}:v=1:a=0[outv]
+    `;
 
     command
-      .complexFilter(filters)
+      .complexFilter(filter, "outv")
       .outputOptions([
-        "-map [vout]",
-        hasMusic ? "-map [aout]" : `-map ${voiceIndex}:a`,
+        "-map [outv]",
+        `-map ${clips.length}:a`,
         "-shortest",
-        "-movflags +faststart",
+        "-movflags +faststart"
       ])
-      .on("start", (cmd) => console.log("🚀 FFmpeg:", cmd))
-      .on("end", () => {
-        console.log("✅ Video built!");
-        resolve();
+      .on("start", (cmd) => {
+        console.log("🚀 FFmpeg started:", cmd);
       })
       .on("error", (err) => {
         console.error("❌ FFmpeg error:", err.message);
         reject(err);
       })
+      .on("end", () => {
+        console.log("✅ Video built!");
+        resolve();
+      })
       .save(outputPath);
   });
 }
 
-
-// ==============================
-// 🚀 API ROUTE
-// ==============================
+// =========================
+// MAIN ENDPOINT
+// =========================
 app.post("/generate-video", async (req, res) => {
   try {
-    const prompt = req.body.prompt || "success mindset";
-    console.log("📥 Prompt:", prompt);
+    const { prompt } = req.body;
+
+    console.log("📥 Request:", prompt);
 
     // 1. get clips
-    const clipsData = await getClips(prompt);
+    const clips = await getClips(prompt);
 
-    // 2. download
-    const clipPaths = [];
-    for (const clip of clipsData) {
-      await downloadFile(clip.url, clip.path);
-      clipPaths.push(clip.path);
-    }
-
-    // 3. voice
+    // 2. voice
     const voiceFile = await generateVoice(prompt);
 
-    // 4. output
+    // 3. output path
     const outputPath = path.join(__dirname, "output.mp4");
 
-    // 5. build
-    await buildVideo(clipPaths, voiceFile, outputPath);
+    // 4. build video
+    await buildVideo(clips, voiceFile, outputPath);
 
-    // 6. send
+    // 5. send video
     res.sendFile(outputPath);
 
   } catch (err) {
-    console.error("❌ SERVER ERROR:", err);
+    console.error("🔥 ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-// ==============================
-// ❤️ HEALTH CHECK
-// ==============================
+// =========================
+// HEALTH CHECK
+// =========================
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
 });
 
-
-// ==============================
+// =========================
+// START SERVER
+// =========================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
