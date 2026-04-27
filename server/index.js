@@ -57,11 +57,13 @@ function generateCaptions(text, filePath) {
 //
 app.post("/generate-video", async (req, res) => {
   try {
-    const { text } = req.body;
+    const text = req.body?.text || req.body?.prompt;
 
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
-    }
+if (!text) {
+  return res.status(400).json({
+    error: "Missing text (send { text: 'your prompt' })"
+  });
+}
 
     console.log("📩 Request:", text);
 
