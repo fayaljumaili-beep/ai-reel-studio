@@ -3,22 +3,18 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
-// ✅ FIXED CORS
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
-  })
-);
+app.use(cors({ origin: "*" }));
 
 const PORT = process.env.PORT || 8080;
 
+// ✅ IMPORTANT: root directory
+const __dirname = new URL('.', import.meta.url).pathname;
+
+// -------------------------
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -26,73 +22,87 @@ app.post("/generate-video", async (req, res) => {
     console.log("🎬 Request:", prompt);
 
     // -------------------------
-    // 1. FAKE CLIP DOWNLOAD (replace later with real API)
+    // 1. DEFINE REAL PATHS
     // -------------------------
-    console.log("📥 Preparing clips...");
-
     const clips = [
-      "assets/video1.mp4",
-      "assets/video2.mp4",
-      "assets/video3.mp4",
+      path.join(__dirname, "assets/video1.mp4"),
+      path.join(__dirname, "assets/video2.mp4"),
+      path.join(__dirname, "assets/video3.mp4"),
     ];
 
     // -------------------------
-    // 2. GENERATE VOICE (mock for now)
+    // 2. CHECK FILES EXIST
     // -------------------------
-    console.log("🎤 Generating voice...");
+    clips.forEach((clip) => {
+      if (!fs.existsSync(clip)) {
+        throw new Error(`Missing file: ${clip}`);
+      }
+    });
 
-    fs.writeFileSync("voice.mp3", ""); // placeholder
-
-    // -------------------------
-    // 3. GENERATE PRO CAPTIONS
-    // -------------------------
-    console.log("🧠 Generating captions...");
-
-    generateCaptions(prompt);
+    console.log("📥 Clips ready");
 
     // -------------------------
-    // 4. CREATE FILE LIST
+    // 3. VOICE (SAFE)
     // -------------------------
-    const fileList = clips.map((c) => `file '${c}'`).join("\n");
-    fs.writeFileSync("list.txt", fileList);
+    const voicePath = path.join(__dirname, "voice.mp3");
+    fs.writeFileSync(voicePath, ""); // placeholder
 
     // -------------------------
-    // 5. STITCH VIDEO (SAFE)
+    // 4. CAPTIONS
     // -------------------------
-    console.log("🎞️ Stitching clips...");
-
-    await runCommand(
-      `ffmpeg -y -f concat -safe 0 -i list.txt -c copy temp.mp4`
-    );
+    const captionsPath = path.join(__dirname, "captions.srt");
+    generateCaptions(prompt, captionsPath);
 
     // -------------------------
-    // 6. ADD AUDIO + CAPTIONS
+    // 5. CREATE CONCAT LIST
     // -------------------------
-    console.log("🎬 Final render...");
+    const listPath = path.join(__dirname, "list.txt");
+
+    const fileList = clips
+      .map((c) => `file '${c}'`)
+      .join("\n");
+
+    fs.writeFileSync(listPath, fileList);
+
+    // -------------------------
+    // 6. CONCAT (RE-ENCODE SAFE)
+    // -------------------------
+    const tempPath = path.join(__dirname, "temp.mp4");
 
     await runCommand(`
-      ffmpeg -y -i temp.mp4 -i voice.mp3 
-      -vf "subtitles=captions.srt:force_style='Fontsize=36,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Shadow=1,Alignment=2'" 
-      -c:v libx264 -c:a aac -shortest output.mp4
+      ffmpeg -y -f concat -safe 0 -i "${listPath}" 
+      -c:v libx264 -preset veryfast -crf 23 
+      -c:a aac 
+      "${tempPath}"
     `);
 
-    console.log("✅ DONE");
+    // -------------------------
+    // 7. FINAL VIDEO
+    // -------------------------
+    const outputPath = path.join(__dirname, "output.mp4");
 
-    const video = fs.readFileSync("output.mp4");
+    await runCommand(`
+      ffmpeg -y -i "${tempPath}" -i "${voicePath}" 
+      -vf "subtitles=${captionsPath}" 
+      -c:v libx264 -c:a aac -shortest 
+      "${outputPath}"
+    `);
+
+    console.log("✅ Video ready");
+
+    const video = fs.readFileSync(outputPath);
     res.setHeader("Content-Type", "video/mp4");
     res.send(video);
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).send("Video generation failed");
+    console.error("❌ ERROR:", err.message);
+    res.status(500).send(err.message);
   }
 });
 
 // -------------------------
-// PRO CAPTIONS (WORD HIGHLIGHT)
-// -------------------------
-function generateCaptions(text) {
+function generateCaptions(text, filePath) {
   const words = text.split(" ");
-
   let srt = "";
   let time = 0;
 
@@ -103,28 +113,24 @@ function generateCaptions(text) {
     const format = (t) =>
       `00:00:${String(t.toFixed(2)).padStart(5, "0").replace(".", ",")}`;
 
-    const line = words
-      .map((w, idx) =>
-        idx === i ? `{\\b1\\c&H00FFFF&}${w}{\\b0}` : w
-      )
-      .join(" ");
+    srt += `${i + 1}
+${format(start)} --> ${format(end)}
+${word}
 
-    srt += `${i + 1}\n${format(start)} --> ${format(end)}\n${line}\n\n`;
+`;
 
     time += 0.5;
   });
 
-  fs.writeFileSync("captions.srt", srt);
+  fs.writeFileSync(filePath, srt);
 }
 
-// -------------------------
-// SAFE COMMAND RUNNER
 // -------------------------
 function runCommand(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
-        console.error("FFmpeg error:", stderr);
+        console.error("FFmpeg:", stderr);
         reject(error);
       } else {
         resolve(stdout);
@@ -135,5 +141,5 @@ function runCommand(cmd) {
 
 // -------------------------
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on ${PORT}`);
 });
