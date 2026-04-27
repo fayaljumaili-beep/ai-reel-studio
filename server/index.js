@@ -1,157 +1,195 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import axios from "axios";
 import fs from "fs";
 import path from "path";
-import fetch from "node-fetch";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+import FormData from "form-data";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
+// ✅ FIXED CORS
+app.use(cors({
+  origin: "*",
+}));
 
-// ===============================
-// 🎬 GENERATE VIDEO ENDPOINT
-// ===============================
-app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    console.log("📩 Request:", prompt);
+// ✅ set ffmpeg path (important for Railway)
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
-    // 1. Get clips
-    const clips = await getClips(prompt);
-    console.log("🎞 Clips:", clips);
+const PORT = process.env.PORT || 5000;
+const __dirname = new URL(".", import.meta.url).pathname;
 
-    // 2. Generate voice
-    const voicePath = await generateVoice(prompt);
-    console.log("🎙 Voice:", voicePath);
+// ==============================
+// 🎥 DOWNLOAD STOCK CLIPS
+// ==============================
+async function downloadClips(query) {
+  console.log("📥 Downloading clips...");
 
-    // 3. Output path
-    const outputPath = path.join(process.cwd(), "output.mp4");
-
-    // 4. Build video
-    await buildVideo(clips, voicePath, outputPath);
-
-    // 5. Send result
-    res.sendFile(outputPath);
-  } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ===============================
-// 🎥 GET STOCK CLIPS (PEXELS)
-// ===============================
-async function getClips(query) {
-  const API_KEY = process.env.PEXELS_API_KEY;
-
-  const res = await fetch(
+  const response = await axios.get(
     `https://api.pexels.com/videos/search?query=${query}&per_page=3`,
     {
       headers: {
-        Authorization: API_KEY,
+        Authorization: process.env.PEXELS_API_KEY,
       },
     }
   );
 
-  const data = await res.json();
-
-  if (!data.videos || data.videos.length === 0) {
-    throw new Error("No videos found");
-  }
-
   const clips = [];
 
-  for (let i = 0; i < 3; i++) {
-    const videoUrl = data.videos[i].video_files[0].link;
-    const filePath = path.join(process.cwd(), `clip-${i}.mp4`);
+  for (let i = 0; i < response.data.videos.length; i++) {
+    const videoUrl = response.data.videos[i].video_files[0].link;
+    const filePath = `clip-${i}.mp4`;
 
-    const videoRes = await fetch(videoUrl);
-    const buffer = await videoRes.buffer();
+    const writer = fs.createWriteStream(filePath);
 
-    fs.writeFileSync(filePath, buffer);
+    const videoStream = await axios({
+      url: videoUrl,
+      method: "GET",
+      responseType: "stream",
+    });
+
+    videoStream.data.pipe(writer);
+
+    await new Promise((res) => writer.on("finish", res));
+
+    console.log("✅ Downloaded:", filePath);
     clips.push(filePath);
   }
 
   return clips;
 }
 
-// ===============================
-// 🔊 GENERATE VOICE (OPENAI TTS)
-// ===============================
+// ==============================
+// 🔊 GENERATE VOICE (OpenAI TTS)
+// ==============================
 async function generateVoice(text) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  console.log("🎙 Generating voice...");
 
-  const res = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const response = await axios.post(
+    "https://api.openai.com/v1/audio/speech",
+    {
       model: "gpt-4o-mini-tts",
       voice: "alloy",
       input: text,
-    }),
-  });
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      responseType: "arraybuffer",
+    }
+  );
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error("OpenAI TTS error: " + err);
-  }
+  const filePath = "voice.mp3";
+  fs.writeFileSync(filePath, response.data);
 
-  const buffer = await res.arrayBuffer();
-  const filePath = path.join(process.cwd(), "voice.mp3");
-
-  fs.writeFileSync(filePath, Buffer.from(buffer));
-
+  console.log("✅ Voice saved:", filePath);
   return filePath;
 }
 
-// ===============================
-// 🎬 BUILD VIDEO (FIXED FFmpeg)
-// ===============================
-function buildVideo(clips, audioPath, outputPath) {
+// ==============================
+// 🎬 BUILD VIDEO (FIXED)
+// ==============================
+async function buildVideo(clips, audioPath, outputPath) {
   return new Promise((resolve, reject) => {
     console.log("🎬 Building video...");
 
     const command = ffmpeg();
 
-    // add clips
-    clips.forEach((clip) => command.input(clip));
+    // add video clips
+    clips.forEach((clip) => {
+      command.input(clip);
+    });
 
-    // add audio
-    command.input(audioPath);
-
+    // STEP 1: concat videos ONLY
     command
-      .on("start", (cmd) => console.log("🚀 FFmpeg:", cmd))
+      .complexFilter([
+        {
+          filter: "concat",
+          options: {
+            n: clips.length,
+            v: 1,
+            a: 0,
+          },
+          inputs: clips.map((_, i) => `${i}:v`),
+          outputs: "v",
+        },
+      ])
+      .outputOptions(["-map [v]"])
+      .output("temp.mp4")
+      .on("end", () => {
+        console.log("✅ Video stitched");
+
+        // STEP 2: add audio
+        ffmpeg()
+          .input("temp.mp4")
+          .input(audioPath)
+          .outputOptions([
+            "-map 0:v",
+            "-map 1:a",
+            "-shortest",
+          ])
+          .save(outputPath)
+          .on("end", () => {
+            console.log("✅ Final video ready");
+            resolve();
+          })
+          .on("error", (err) => {
+            console.error("❌ Audio merge error:", err);
+            reject(err);
+          });
+      })
       .on("error", (err) => {
-        console.error("❌ FFmpeg error:", err.message);
+        console.error("❌ Concat error:", err);
         reject(err);
       })
-      .on("end", () => {
-        console.log("✅ Video built!");
-        resolve();
-      })
-      .mergeToFile(outputPath);
+      .run();
   });
 }
 
-// ===============================
-// HEALTH CHECK
-// ===============================
-app.get("/", (req, res) => {
-  res.send("🚀 Server running");
+// ==============================
+// 🚀 API ROUTE
+// ==============================
+app.post("/generate-video", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    console.log("🧠 Request:", prompt);
+
+    // 1. get clips
+    const clips = await downloadClips(prompt);
+
+    // 2. voice
+    const voiceFile = await generateVoice(prompt);
+
+    // 3. build video
+    const outputPath = path.join(__dirname, "output.mp4");
+    await buildVideo(clips, voiceFile, outputPath);
+
+    // 4. send result
+    res.sendFile(outputPath);
+
+  } catch (err) {
+    console.error("🔥 SERVER ERROR:", err.message);
+
+    res.status(500).json({
+      error: err.message || "Video generation failed",
+    });
+  }
 });
 
+// ==============================
+app.get("/", (req, res) => {
+  res.send("🚀 AI Reel Server Running");
+});
+
+// ==============================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
