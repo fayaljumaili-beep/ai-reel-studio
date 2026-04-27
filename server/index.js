@@ -1,142 +1,256 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+import fetch from "node-fetch";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
-import fetch from "node-fetch";
+import dotenv from "dotenv";
+import OpenAI from "openai";
 import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
+const PORT = 5000;
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const VIDEOS_PATH = path.join(__dirname, "assets/videos");
 
-
-// 🔒 Escape text for FFmpeg
-function escapeText(text) {
-  return text
-    .replace(/'/g, "\\'")
-    .replace(/:/g, "\\:")
-    .replace(/,/g, "\\,")
-    .replace(/\n/g, " ");
-}
-
-
-// 🎥 Get local fallback video
-function getLocalVideo() {
-  const files = fs.readdirSync(VIDEOS_PATH)
-    .filter(f => f.endsWith(".mp4"));
-
-  if (!files.length) {
-    throw new Error("No local videos found");
-  }
-
-  const random = files[Math.floor(Math.random() * files.length)];
-  return path.join(VIDEOS_PATH, random);
-}
-
-
-// 🌍 Fetch from Pexels
-async function getPexelsVideo(query) {
-  try {
-    console.log("🔎 Fetching Pexels video...");
-
-    const res = await fetch(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=5`,
-      {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY
-        }
-      }
-    );
-
-    const data = await res.json();
-
-    if (!data.videos || data.videos.length === 0) {
-      throw new Error("No Pexels videos");
+// ==============================
+// 🎥 GET CLIPS FROM PEXELS
+// ==============================
+async function getClips(query) {
+  const res = await fetch(
+    `https://api.pexels.com/videos/search?query=${query}&per_page=3`,
+    {
+      headers: {
+        Authorization: process.env.PEXELS_API_KEY,
+      },
     }
+  );
 
-    const video = data.videos[Math.floor(Math.random() * data.videos.length)];
-    const file = video.video_files.find(v => v.quality === "sd") || video.video_files[0];
+  const data = await res.json();
 
-    const tempPath = path.join(__dirname, "temp.mp4");
-
-    const videoRes = await fetch(file.link);
-    const buffer = await videoRes.arrayBuffer();
-
-    fs.writeFileSync(tempPath, Buffer.from(buffer));
-
-    console.log("✅ Using Pexels video");
-
-    return tempPath;
-
-  } catch (err) {
-    console.log("⚠️ Pexels failed → using local video");
-    return getLocalVideo();
-  }
-}
-
-
-// 🎬 Build video (FIXED)
-function buildVideo({ input, text, output }) {
-  return new Promise((resolve, reject) => {
-
-    const safeText = escapeText(text).slice(0, 100);
-
-    const cmd = `ffmpeg -y -i "${input}" -vf "drawtext=text='${safeText}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.5:boxborderw=10:x=(w-text_w)/2:y=h-150" -t 8 -c:v libx264 -preset ultrafast -pix_fmt yuv420p "${output}"`;
-
-    console.log("🎬 Running FFmpeg...");
-
-    exec(cmd, (err) => {
-      if (err) {
-        console.error("FFmpeg error:", err);
-        return reject(err);
-      }
-      resolve(output);
-    });
+  return data.videos.map((video, i) => {
+    const file = video.video_files[0].link;
+    const filePath = path.join(__dirname, `clip-${i}.mp4`);
+    return { url: file, path: filePath };
   });
 }
 
 
-// 🚀 API
+// ==============================
+// ⬇️ DOWNLOAD FILE
+// ==============================
+async function downloadFile(url, outputPath) {
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(outputPath, Buffer.from(buffer));
+  console.log("⬇️ Downloaded:", outputPath);
+}
+
+
+// ==============================
+// 🎙 GENERATE VOICE
+// ==============================
+async function generateVoice(text) {
+  console.log("🎙 Generating voice...");
+
+  const response = await openai.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text,
+  });
+
+  const filePath = path.join(__dirname, "voice.mp3");
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  fs.writeFileSync(filePath, buffer);
+
+  console.log("🔊 Voice saved:", filePath);
+  return filePath;
+}
+
+
+// ==============================
+// 🎬 BUILD VIDEO (FULL UPGRADE)
+// ==============================
+async function buildVideo(clips, audioPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    console.log("🎬 Building viral video...");
+
+    const command = ffmpeg();
+
+    // 🎥 add clips
+    clips.forEach((clip) => command.input(clip));
+
+    // 🎙 voice
+    command.input(audioPath);
+
+    // 🎵 optional music
+    const musicPath = path.join(__dirname, "music.mp3");
+    const hasMusic = fs.existsSync(musicPath);
+
+    if (hasMusic) {
+      command.input(musicPath);
+      console.log("🎵 Music detected");
+    }
+
+    const hook = "YOU'RE DOING THIS WRONG";
+    const caption = "SUCCESS IS A CHOICE";
+
+    const filters = [
+      // 🎥 concat clips
+      {
+        filter: "concat",
+        options: { n: clips.length, v: 1, a: 0 },
+        inputs: clips.map((_, i) => `[${i}:v]`),
+        outputs: "base",
+      },
+
+      // 📱 vertical format
+      {
+        filter: "scale",
+        options: "720:1280:force_original_aspect_ratio=decrease",
+        inputs: "base",
+        outputs: "scaled",
+      },
+      {
+        filter: "pad",
+        options: "720:1280:(ow-iw)/2:(oh-ih)/2",
+        inputs: "scaled",
+        outputs: "padded",
+      },
+
+      // 🔥 hook (top, first 2 sec)
+      {
+        filter: "drawtext",
+        options: {
+          text: hook,
+          fontsize: 50,
+          fontcolor: "white",
+          x: "(w-text_w)/2",
+          y: "80",
+          box: 1,
+          boxcolor: "black@0.6",
+          boxborderw: 20,
+          enable: "lt(t,2)",
+        },
+        inputs: "padded",
+        outputs: "hooked",
+      },
+
+      // 🧠 caption (bottom)
+      {
+        filter: "drawtext",
+        options: {
+          text: caption,
+          fontsize: 60,
+          fontcolor: "white",
+          x: "(w-text_w)/2",
+          y: "h-150",
+          box: 1,
+          boxcolor: "black@0.5",
+          boxborderw: 20,
+        },
+        inputs: "hooked",
+        outputs: "vout",
+      },
+    ];
+
+    // 🎵 AUDIO MIX
+    const voiceIndex = clips.length;
+    const musicIndex = clips.length + 1;
+
+    if (hasMusic) {
+      filters.push({
+        filter: "amix",
+        options: {
+          inputs: 2,
+          duration: "shortest",
+        },
+        inputs: [`[${voiceIndex}:a]`, `[${musicIndex}:a]`],
+        outputs: "aout",
+      });
+    }
+
+    command
+      .complexFilter(filters)
+      .outputOptions([
+        "-map [vout]",
+        hasMusic ? "-map [aout]" : `-map ${voiceIndex}:a`,
+        "-shortest",
+        "-movflags +faststart",
+      ])
+      .on("start", (cmd) => console.log("🚀 FFmpeg:", cmd))
+      .on("end", () => {
+        console.log("✅ Video built!");
+        resolve();
+      })
+      .on("error", (err) => {
+        console.error("❌ FFmpeg error:", err.message);
+        reject(err);
+      })
+      .save(outputPath);
+  });
+}
+
+
+// ==============================
+// 🚀 API ROUTE
+// ==============================
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const prompt = req.body.prompt || "success mindset";
+    console.log("📥 Prompt:", prompt);
 
-    const inputVideo = await getPexelsVideo(prompt);
+    // 1. get clips
+    const clipsData = await getClips(prompt);
 
+    // 2. download
+    const clipPaths = [];
+    for (const clip of clipsData) {
+      await downloadFile(clip.url, clip.path);
+      clipPaths.push(clip.path);
+    }
+
+    // 3. voice
+    const voiceFile = await generateVoice(prompt);
+
+    // 4. output
     const outputPath = path.join(__dirname, "output.mp4");
 
-    await buildVideo({
-      input: inputVideo,
-      text: prompt,
-      output: outputPath
-    });
+    // 5. build
+    await buildVideo(clipPaths, voiceFile, outputPath);
 
+    // 6. send
     res.sendFile(outputPath);
 
   } catch (err) {
-    console.error("❌ Server error:", err);
-    res.status(500).json({ error: "Video generation failed" });
+    console.error("❌ SERVER ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 
-// ❤️ Health check
+// ==============================
+// ❤️ HEALTH CHECK
+// ==============================
 app.get("/", (req, res) => {
-  res.send("🚀 Server is running");
+  res.send("🚀 Server running");
 });
 
 
+// ==============================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
