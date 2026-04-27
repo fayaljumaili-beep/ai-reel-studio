@@ -79,8 +79,8 @@ ${text}
     const safeCaptionsPath = captionsPath.replace(/:/g, "\\:");
 
     await runCommand(
-      `ffmpeg -y -i "${tempVideo}" -vf subtitles="${safeCaptionsPath}" "${outputVideo}"`
-    );
+  `ffmpeg -y -i "${tempVideo}" -vf "scale=720:-2,subtitles=${safeCaptionsPath}" -preset ultrafast -crf 28 "${outputVideo}"`
+);
 
     console.log("✅ Video created:", outputVideo);
 
