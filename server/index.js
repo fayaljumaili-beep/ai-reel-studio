@@ -16,10 +16,9 @@ const CLIPS = [
   path.join(process.cwd(), "server/assets/clip-2.mp4"),
 ];
 
-const MUSIC = path.join(process.cwd(), "server/assets/music.mp3");
 const OUTPUT = path.join(process.cwd(), "server/output.mp4");
 
-// ✅ helper: escape text for ffmpeg
+// ✅ helper to escape text (safe for ffmpeg)
 function safeText(text) {
   return text
     .replace(/:/g, "\\:")
@@ -31,29 +30,33 @@ app.get("/generate-video", async (req, res) => {
   try {
     console.log("🎬 Generating video...");
 
-    // ✅ check files exist (debug safety)
+    // ✅ check files exist
     CLIPS.forEach((clip) => {
       if (!fs.existsSync(clip)) {
         throw new Error(`Missing file: ${clip}`);
       }
     });
 
-    if (!fs.existsSync(MUSIC)) {
-      throw new Error(`Missing music: ${MUSIC}`);
-    }
-
-    const TEXT = safeText("Stay focused"); // 🚫 no emoji (safe)
+    const TEXT = safeText("Stay focused");
 
     const command = ffmpeg();
 
-    // ✅ add clips
+    // ✅ add all clips
     CLIPS.forEach((clip) => {
       command.input(clip);
     });
 
-    // ✅ concat + text overlay
     command
       .complexFilter([
+        // 🔥 STEP 1: normalize all clips (fix concat crash)
+        ...CLIPS.map((_, i) => ({
+          filter: "scale",
+          options: { w: 720, h: 1280 },
+          inputs: `${i}:v`,
+          outputs: `v${i}`,
+        })),
+
+        // 🔥 STEP 2: concat normalized clips
         {
           filter: "concat",
           options: {
@@ -61,8 +64,11 @@ app.get("/generate-video", async (req, res) => {
             v: 1,
             a: 0,
           },
+          inputs: CLIPS.map((_, i) => `v${i}`),
           outputs: "v",
         },
+
+        // 🔥 STEP 3: add text
         {
           filter: "drawtext",
           options: {
@@ -78,7 +84,6 @@ app.get("/generate-video", async (req, res) => {
       ])
       .outputOptions([
         "-map [v2]",
-        "-map 0:a?",
         "-c:v libx264",
         "-preset veryfast",
         "-crf 23",
