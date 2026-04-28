@@ -2,11 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
-import fetch from "node-fetch";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
-import { pipeline } from "stream";
-import { promisify } from "util";
 
 dotenv.config();
 ffmpeg.setFfmpegPath(ffmpegPath.path);
@@ -17,57 +14,20 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 const TEMP_DIR = "/tmp";
-const streamPipeline = promisify(pipeline);
 
 //////////////////////////////
-// 🔥 MULTI-SOURCE VIDEOS
+// 🎬 LOCAL VIDEO POOL
 //////////////////////////////
-const VIDEO_SOURCES = [
-  // primary
-  [
-    "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-  ],
-  // fallback
-  [
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
-  ]
+const LOCAL_VIDEOS = [
+  `${process.cwd()}/clip-0.mp4`,
+  `${process.cwd()}/clip-1.mp4`,
+  `${process.cwd()}/clip-2.mp4`
 ];
-
-//////////////////////////////
-// 🔁 SAFE DOWNLOAD (RETRY)
-//////////////////////////////
-async function downloadWithRetry(urls, filepath) {
-  for (let url of urls) {
-    try {
-      console.log("Trying:", url);
-
-      const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0" }
-      });
-
-      if (!res.ok) throw new Error("Bad response");
-
-      await streamPipeline(res.body, fs.createWriteStream(filepath));
-
-      const size = fs.statSync(filepath).size;
-      if (size < 50000) throw new Error("Too small");
-
-      console.log("Downloaded OK:", url);
-      return;
-    } catch (err) {
-      console.log("Failed:", url);
-    }
-  }
-
-  throw new Error("All video sources failed");
-}
 
 //////////////////////////////
 // 🧠 SCRIPT
 //////////////////////////////
-function generateScript(prompt) {
+function generateScript() {
   return [
     "Success starts with your mindset",
     "Discipline beats motivation every time",
@@ -93,8 +53,6 @@ async function generateVoice(text, output) {
     })
   });
 
-  if (!res.ok) throw new Error("Voice failed");
-
   const buffer = await res.arrayBuffer();
   fs.writeFileSync(output, Buffer.from(buffer));
 }
@@ -104,21 +62,14 @@ async function generateVoice(text, output) {
 //////////////////////////////
 app.post("/generate-video", async (req, res) => {
   try {
-    const script = generateScript(req.body.prompt);
+    const script = generateScript();
     const clips = [];
 
     console.log("SCRIPT:", script);
 
-    ////////////////////////////
-    // 🎬 CLIPS
-    ////////////////////////////
     for (let i = 0; i < script.length; i++) {
-      const input = `${TEMP_DIR}/input_${i}.mp4`;
+      const input = LOCAL_VIDEOS[i % LOCAL_VIDEOS.length];
       const output = `${TEMP_DIR}/clip_${i}.mp4`;
-
-      // 🔥 retry across sources
-      const sourceGroup = VIDEO_SOURCES[i % VIDEO_SOURCES.length];
-      await downloadWithRetry(sourceGroup, input);
 
       const caption = script[i];
       const hook = "This will change your life";
@@ -143,7 +94,7 @@ app.post("/generate-video", async (req, res) => {
     }
 
     ////////////////////////////
-    // 🔗 CONCAT
+    // CONCAT
     ////////////////////////////
     const list = `${TEMP_DIR}/list.txt`;
     fs.writeFileSync(list, clips.map(c => `file '${c}'`).join("\n"));
@@ -161,13 +112,13 @@ app.post("/generate-video", async (req, res) => {
     });
 
     ////////////////////////////
-    // 🔊 AUDIO
+    // VOICE
     ////////////////////////////
     const voiceFile = `${TEMP_DIR}/voice.mp3`;
     await generateVoice(script.join(". "), voiceFile);
 
     ////////////////////////////
-    // 🎥 FINAL
+    // FINAL
     ////////////////////////////
     const final = `${TEMP_DIR}/final.mp4`;
 
