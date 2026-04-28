@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import ffmpeg from "fluent-ffmpeg";
 import fs from "fs";
-import path from "path";
 import gTTS from "gtts";
 
 const app = express();
@@ -12,14 +11,15 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 const TEMP_DIR = "/tmp";
 
-// 🔥 LOCAL VIDEO FILES (MUST EXIST IN /server)
+//////////////////////////////////////////////////////
+// 📁 LOCAL FILES
+//////////////////////////////////////////////////////
 const LOCAL_VIDEOS = [
   `${process.cwd()}/server/clip-0.mp4`,
   `${process.cwd()}/server/clip-1.mp4`,
   `${process.cwd()}/server/clip-2.mp4`,
 ];
 
-// 🎵 BACKGROUND MUSIC (optional but powerful)
 const MUSIC_FILE = `${process.cwd()}/server/music.mp3`;
 
 //////////////////////////////////////////////////////
@@ -35,14 +35,14 @@ function generateScript(topic) {
 }
 
 //////////////////////////////////////////////////////
-// 🔊 TEXT → VOICE
+// 🔊 VOICE
 //////////////////////////////////////////////////////
 async function generateVoice(script, output) {
   return new Promise((resolve, reject) => {
     const text = script.join(". ");
-    const gtts = new gTTS(text, "en");
+    const tts = new gTTS(text, "en");
 
-    gtts.save(output, (err) => {
+    tts.save(output, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -56,17 +56,15 @@ app.post("/generate-video", async (req, res) => {
   try {
     const topic = req.body.topic || "success";
 
-    // paths
     const merged = `${TEMP_DIR}/merged.mp4`;
     const voiceFile = `${TEMP_DIR}/voice.mp3`;
     const final = `${TEMP_DIR}/final.mp4`;
 
     const script = generateScript(topic);
-
     console.log("SCRIPT:", script);
 
     //////////////////////////////////////////////////////
-    // 1. 🎥 MERGE CLIPS (FIXES 0.15s BUG)
+    // 1. 🎥 MERGE CLIPS
     //////////////////////////////////////////////////////
     await new Promise((resolve, reject) => {
       const command = ffmpeg();
@@ -90,23 +88,46 @@ app.post("/generate-video", async (req, res) => {
     await generateVoice(script, voiceFile);
 
     //////////////////////////////////////////////////////
-    // 3. 🎵 ADD BACKGROUND MUSIC + VOICE MIX
+    // 3. 🔧 NORMALIZE AUDIO (CRITICAL FIX)
+    //////////////////////////////////////////////////////
+    const fixedVoice = `${TEMP_DIR}/voice-fixed.mp3`;
+    const fixedMusic = `${TEMP_DIR}/music-fixed.mp3`;
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(voiceFile)
+        .audioCodec("aac")
+        .audioFrequency(44100)
+        .audioChannels(2)
+        .save(fixedVoice)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(MUSIC_FILE)
+        .audioCodec("aac")
+        .audioFrequency(44100)
+        .audioChannels(2)
+        .save(fixedMusic)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    //////////////////////////////////////////////////////
+    // 4. 🎵 MIX AUDIO (VOICE + MUSIC)
     //////////////////////////////////////////////////////
     const withAudio = `${TEMP_DIR}/with-audio.mp4`;
 
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(merged)
-        .input(voiceFile)
-        .input(MUSIC_FILE)
+        .input(fixedVoice)
+        .input(fixedMusic)
 
         .complexFilter([
-          // lower music volume
           "[2:a]volume=0.2[music]",
-          // keep voice louder
           "[1:a]volume=1.5[voice]",
-          // mix both
-          "[voice][music]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+          "[voice][music]amix=inputs=2:duration=first[aout]",
         ])
 
         .outputOptions([
@@ -123,7 +144,7 @@ app.post("/generate-video", async (req, res) => {
     });
 
     //////////////////////////////////////////////////////
-    // 4. 🎬 FINAL OUTPUT
+    // 5. 🎬 FINAL OUTPUT
     //////////////////////////////////////////////////////
     fs.copyFileSync(withAudio, final);
 
