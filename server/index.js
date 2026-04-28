@@ -1,156 +1,173 @@
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
-import axios from "axios";
-import { exec } from "child_process";
-import util from "util";
+import fetch from "node-fetch";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 
-const execPromise = util.promisify(exec);
+dotenv.config();
+ffmpeg.setFfmpegPath(ffmpegPath.path);
+
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-const TMP_DIR = "./tmp";
-if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR);
+const PORT = process.env.PORT || 8080;
 
-async function run(cmd) {
-  console.log("Running:", cmd);
-  await execPromise(cmd);
+const TEMP_DIR = "/tmp";
+
+// --- helper: download file ---
+async function downloadFile(url, filepath) {
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(filepath, Buffer.from(buffer));
 }
 
-// 🎤 Generate script
-async function generateScript(prompt) {
-  const res = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: `Write a short viral motivational script about: ${prompt}. Max 2 sentences.`
-        }
-      ]
+// --- helper: generate fake script (replace later with GPT) ---
+function generateScript(prompt) {
+  return [
+    "Success starts with your mindset",
+    "Discipline beats motivation every time",
+    "Small habits create big results",
+    "Stay focused and never quit"
+  ];
+}
+
+// --- helper: sample stock videos ---
+function getVideos() {
+  return [
+    "https://videos.pexels.com/video-files/3195394/3195394-hd_720_1280_25fps.mp4",
+    "https://videos.pexels.com/video-files/855564/855564-hd_720_1280_25fps.mp4",
+    "https://videos.pexels.com/video-files/3209298/3209298-hd_720_1280_25fps.mp4",
+    "https://videos.pexels.com/video-files/854081/854081-hd_720_1280_25fps.mp4"
+  ];
+}
+
+// --- helper: TTS (OpenAI) ---
+async function generateVoice(text, outputPath) {
+  const response = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
     },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      }
-    }
-  );
+    body: JSON.stringify({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: text
+    })
+  });
 
-  return res.data.choices[0].message.content;
+  const buffer = await response.arrayBuffer();
+  fs.writeFileSync(outputPath, Buffer.from(buffer));
 }
 
-// 🔊 Generate voice
-async function generateVoice(text) {
-  const response = await axios.post(
-    "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
-    { text },
-    {
-      responseType: "arraybuffer",
-      headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-      }
-    }
-  );
-
-  const file = `${TMP_DIR}/voice.mp3`;
-  fs.writeFileSync(file, response.data);
-  return file;
-}
-
+// --- main route ---
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, style, clips } = req.body;
-    const count = parseInt(clips) || 5;
+    const { prompt } = req.body;
 
-    // 🎯 style keywords
-    let keywords = [];
+    const script = generateScript(prompt);
+    const videos = getVideos();
 
-    if (style === "luxury") {
-      keywords = ["money", "luxury", "cars", "rich", "success"];
-    } else if (style === "dark") {
-      keywords = ["dark city", "night", "rain", "neon"];
-    } else {
-      keywords = ["motivation", "focus", "gym", "success"];
-    }
+    const clips = [];
 
-    const scenes = keywords.slice(0, count);
-
-    // 🎤 script + voice
-    const script = await generateScript(prompt);
     console.log("SCRIPT:", script);
 
-    const voiceFile = await generateVoice(script);
+    // 🔥 generate clips
+    for (let i = 0; i < script.length; i++) {
+      const videoUrl = videos[i % videos.length];
+      const inputPath = `${TEMP_DIR}/input_${i}.mp4`;
+      const outputPath = `${TEMP_DIR}/clip_${i}.mp4`;
 
-    const words = script.split(" ");
+      await downloadFile(videoUrl, inputPath);
 
-    const clipsArr = [];
+      const caption = script[i];
+      const hook = "This will change your life";
 
-    for (let i = 0; i < scenes.length; i++) {
-      const response = await axios.get(
-        `https://api.pexels.com/videos/search?query=${scenes[i]}&per_page=10`,
-        {
-          headers: {
-            Authorization: process.env.PEXELS_API_KEY
-          }
-        }
-      );
+      const isFirst = i === 0;
 
-      const videos = response.data.videos;
-      if (!videos.length) continue;
+      const textFilter = isFirst
+        ? `drawtext=text='${hook}':fontcolor=yellow:fontsize=60:x=(w-text_w)/2:y=150,
+           drawtext=text='${caption}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-200`
+        : `drawtext=text='${caption}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-200`;
 
-      const video = videos[i % videos.length];
-      const url = video.video_files[0].link;
+      await new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .setStartTime(0)
+          .setDuration(4)
+          .videoFilters([
+            `scale=720:1280`,
+            `${textFilter}`
+          ])
+          .outputOptions([
+            "-c:v libx264",
+            "-preset fast",
+            "-crf 23",
+            "-pix_fmt yuv420p"
+          ])
+          .save(outputPath)
+          .on("end", resolve)
+          .on("error", reject);
+      });
 
-      const raw = `${TMP_DIR}/raw_${i}.mp4`;
-      const clip = `${TMP_DIR}/clip_${i}.mp4`;
-
-      const stream = await axios.get(url, { responseType: "stream" });
-      const writer = fs.createWriteStream(raw);
-      stream.data.pipe(writer);
-      await new Promise(r => writer.on("finish", r));
-
-      // 🧠 caption per scene
-      const caption = words.slice(i * 3, i * 3 + 3).join(" ");
-
-      await run(
-        `ffmpeg -y -i ${raw} -t 4 -vf "scale=720:1280,drawtext=text='${caption}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-200" -r 30 -c:v libx264 -preset veryfast -pix_fmt yuv420p -an ${clip}`
-      );
-
-      clipsArr.push(clip);
+      clips.push(outputPath);
     }
 
-    console.log("CLIPS:", clipsArr);
+    console.log("CLIPS:", clips);
 
-    // 🧩 concat
-    const list = clipsArr.map(c => `file '${path.resolve(c)}'`).join("\n");
-    fs.writeFileSync(`${TMP_DIR}/list.txt`, list);
-
-    const merged = `${TMP_DIR}/merged.mp4`;
-
-    await run(
-      `ffmpeg -y -f concat -safe 0 -i ${TMP_DIR}/list.txt -c copy ${merged}`
+    // 🔥 concat clips
+    const listFile = `${TEMP_DIR}/list.txt`;
+    fs.writeFileSync(
+      listFile,
+      clips.map(c => `file '${c}'`).join("\n")
     );
 
-    // 🔊 merge voice
-    const final = `${TMP_DIR}/final.mp4`;
+    const mergedVideo = `${TEMP_DIR}/merged.mp4`;
 
-    await run(
-      `ffmpeg -y -i ${merged} -i ${voiceFile} -c:v copy -c:a aac -shortest ${final}`
-    );
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(listFile)
+        .inputOptions(["-f concat", "-safe 0"])
+        .outputOptions(["-c copy"])
+        .save(mergedVideo)
+        .on("end", resolve)
+        .on("error", reject);
+    });
 
-    res.sendFile(path.resolve(final));
+    // 🔥 generate voice
+    const fullScript = script.join(". ");
+    const audioPath = `${TEMP_DIR}/voice.mp3`;
+
+    await generateVoice(fullScript, audioPath);
+
+    // 🔥 merge audio + video
+    const finalVideo = `${TEMP_DIR}/final.mp4`;
+
+    await new Promise((resolve, reject) => {
+      ffmpeg(mergedVideo)
+        .input(audioPath)
+        .outputOptions([
+          "-c:v copy",
+          "-c:a aac",
+          "-shortest"
+        ])
+        .save(finalVideo)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    // 🔥 send file
+    res.sendFile(finalVideo);
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("error");
+    res.status(500).send("Error generating video");
   }
 });
 
-app.listen(process.env.PORT || 8080, () => {
-  console.log("Server running on port 8080");
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
