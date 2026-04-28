@@ -2,99 +2,73 @@ import express from "express";
 import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
-import cors from "cors";
+import cors from "cors"; // ✅ proper import
 
 const app = express();
-app.use(cors({
-  origin: "https://ai-reel-frontend-ko1nhmdut-fayaljumaili-6560s-projects.vercel.app"
-}));
-
 const PORT = process.env.PORT || 8080;
 
-const ROOT = process.cwd();
-
-// ✅ Your files (must exist exactly)
-const CLIPS = [
-  path.join(ROOT, "server/assets/clip-0.mp4"),
-  path.join(ROOT, "server/assets/clip-1.mp4"),
-  path.join(ROOT, "server/assets/clip-2.mp4"),
-];
-
-const AUDIO = path.join(ROOT, "server/assets/music.mp3");
-
-const MERGED = path.join(ROOT, "server/merged.mp4");
-const OUTPUT = path.join(ROOT, "server/output.mp4");
-
-const CAPTION = "Success starts with action";
+// ✅ Proper CORS (fixes frontend connection)
+app.use(cors({
+  origin: "*", // you can lock this later to your Vercel domain
+}));
 
 app.get("/", (req, res) => {
-  res.send("🚀 AI Reel Backend Running");
+  res.send("Backend running ✅");
 });
 
 app.get("/generate-video", async (req, res) => {
   try {
     console.log("🎬 Generating video...");
 
-    // 🧹 cleanup old files
-    if (fs.existsSync(MERGED)) fs.unlinkSync(MERGED);
-    if (fs.existsSync(OUTPUT)) fs.unlinkSync(OUTPUT);
+    const base = process.cwd();
 
-    // 🎬 STEP 1: CONCAT (REAL FIX)
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(CLIPS[0])
-        .input(CLIPS[1])
-        .input(CLIPS[2])
-        .complexFilter([
-          {
-            filter: "concat",
-            options: {
-              n: 3,
-              v: 1,
-              a: 0,
-            },
-          },
-        ])
-        .outputOptions(["-pix_fmt yuv420p"])
-        .on("start", (cmd) => console.log("Concat cmd:", cmd))
-        .on("end", () => {
-          console.log("✅ Clips merged");
-          resolve();
-        })
-        .on("error", (err) => {
-          console.error("❌ Concat error:", err.message);
-          reject(err);
-        })
-        .save(MERGED);
-    });
+    const clips = [
+      path.join(base, "server/assets/clip-0.mp4"),
+      path.join(base, "server/assets/clip-1.mp4"),
+      path.join(base, "server/assets/clip-2.mp4"),
+    ];
 
-    // 🎵 STEP 2: ADD AUDIO + CAPTIONS
-    ffmpeg(MERGED)
-      .input(AUDIO)
-      .outputOptions([
-        "-map 0:v",
-        "-map 1:a",
-        "-shortest",
+    const audio = path.join(base, "server/assets/music.mp3");
+    const output = path.join(base, "output.mp4");
 
-        // 📱 vertical + caption
-        `-vf scale=720:1280,drawtext=text='${CAPTION}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-150`,
+    // 🔥 create concat file
+    const listFile = path.join(base, "filelist.txt");
+    fs.writeFileSync(
+      listFile,
+      clips.map(c => `file '${c}'`).join("\n")
+    );
 
-        "-pix_fmt yuv420p",
+    ffmpeg()
+      .input(listFile)
+      .inputOptions(["-f concat", "-safe 0"])
+      .input(audio)
+
+      .complexFilter([
+        "[0:v]scale=720:1280,format=yuv420p[v]",
+        "[1:a]volume=0.8[a]"
       ])
-      .on("start", (cmd) => console.log("Final cmd:", cmd))
+
+      .outputOptions([
+        "-map [v]",
+        "-map [a]",
+        "-shortest",
+        "-vf drawtext=text='Stay focused 💰':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=h-100"
+      ])
+
+      .on("start", cmd => console.log("FFmpeg:", cmd))
       .on("end", () => {
-        console.log("✅ Final video ready");
-        res.sendFile(OUTPUT);
+        console.log("✅ Done");
+        res.sendFile(output);
       })
-      .on("error", (err) => {
+      .on("error", err => {
         console.error("❌ FFmpeg error:", err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).send(err.message);
       })
-      .save(OUTPUT);
+      .save(output);
 
   } catch (err) {
-    console.error("❌ Server error:", err);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).send(err.message);
   }
 });
 
