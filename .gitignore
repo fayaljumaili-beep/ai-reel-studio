@@ -60,7 +60,6 @@ server/assets/videos/
 
 # keep folder structure if needed
 
-server/assets/*
 !server/assets/videos/
 !server/assets/videos/*.mp4
 
