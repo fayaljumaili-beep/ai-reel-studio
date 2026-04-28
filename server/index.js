@@ -39,32 +39,43 @@ app.get("/generate-video", async (req, res) => {
     );
 
     ffmpeg()
-      .input(listFile)
-      .inputOptions(["-f concat", "-safe 0"])
-      .input(audio)
+  .input(listFile)
+  .inputOptions(["-f concat", "-safe 0"])
+  .input(audio)
 
-      .complexFilter([
-        "[0:v]scale=720:1280,format=yuv420p[v]",
-        "[1:a]volume=0.8[a]"
-      ])
+  .complexFilter([
+    "[0:v]scale=720:1280,format=yuv420p[v]",
+    "[1:a]volume=0.8[a]"
+  ])
 
-      .outputOptions([
-        "-map [v]",
-        "-map [a]",
-        "-shortest",
-        "-vf drawtext=text='Stay focused 💰':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=h-100"
-      ])
+  // ✅ MOVE drawtext HERE (not in outputOptions)
+  .videoFilters({
+    filter: "drawtext",
+    options: {...} })
+      text: "Stay focused",
+      fontsize: 40,
+      fontcolor: "white",
+      x: "(w-text_w)/2",
+      y: "h-100"
+    }
+  })
 
-      .on("start", cmd => console.log("FFmpeg:", cmd))
-      .on("end", () => {
-        console.log("✅ Done");
-        res.sendFile(output);
-      })
-      .on("error", err => {
-        console.error("❌ FFmpeg error:", err.message);
-        res.status(500).send(err.message);
-      })
-      .save(output);
+  .outputOptions([
+    "-map [v]",
+    "-map [a]",
+    "-shortest"
+  ])
+
+  .on("start", cmd => console.log("FFmpeg:", cmd))
+  .on("end", () => {
+    console.log("✅ Done");
+    res.sendFile(output);
+  })
+  .on("error", err => {
+    console.error("❌ FFmpeg error:", err.message);
+    res.status(500).send(err.message);
+  })
+  .save(output);
 
   } catch (err) {
     console.error(err);
