@@ -2,8 +2,11 @@ import express from "express";
 import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
+
 const PORT = process.env.PORT || 8080;
 
 const ROOT = process.cwd();
