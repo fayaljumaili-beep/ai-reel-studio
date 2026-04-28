@@ -101,7 +101,6 @@ app.post("/generate-video", async (req, res) => {
 
           "-pix_fmt yuv420p",
         ])
-        .videoFilters(captionFilter)
         .on("end", resolve)
         .on("error", reject)
         .save(finalVideo);
