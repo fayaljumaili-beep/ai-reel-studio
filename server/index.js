@@ -6,6 +6,8 @@ import path from "path";
 import fetch from "node-fetch";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
+import { pipeline } from "stream";
+import { promisify } from "util";
 
 dotenv.config();
 ffmpeg.setFfmpegPath(ffmpegPath.path);
@@ -15,17 +17,34 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
-
 const TEMP_DIR = "/tmp";
 
-// --- helper: download file ---
+const streamPipeline = promisify(pipeline);
+
+//////////////////////////////
+// 🔥 SAFE DOWNLOAD (FIXED)
+//////////////////////////////
 async function downloadFile(url, filepath) {
-  const res = await fetch(url);
-  const buffer = await res.arrayBuffer();
-  fs.writeFileSync(filepath, Buffer.from(buffer));
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${url}`);
+  }
+
+  await streamPipeline(response.body, fs.createWriteStream(filepath));
+
+  const stats = fs.statSync(filepath);
+
+  if (stats.size < 100000) {
+    throw new Error("Downloaded file too small (corrupted)");
+  }
+
+  console.log("Downloaded:", filepath, stats.size);
 }
 
-// --- helper: generate fake script (replace later with GPT) ---
+//////////////////////////////
+// 🧠 SCRIPT (TEMP)
+//////////////////////////////
 function generateScript(prompt) {
   return [
     "Success starts with your mindset",
@@ -35,7 +54,9 @@ function generateScript(prompt) {
   ];
 }
 
-// --- helper: sample stock videos ---
+//////////////////////////////
+// 🎬 VIDEO SOURCES
+//////////////////////////////
 function getVideos() {
   return [
     "https://videos.pexels.com/video-files/3195394/3195394-hd_720_1280_25fps.mp4",
@@ -45,7 +66,9 @@ function getVideos() {
   ];
 }
 
-// --- helper: TTS (OpenAI) ---
+//////////////////////////////
+// 🔊 AI VOICE
+//////////////////////////////
 async function generateVoice(text, outputPath) {
   const response = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
@@ -60,11 +83,19 @@ async function generateVoice(text, outputPath) {
     })
   });
 
+  if (!response.ok) {
+    throw new Error("TTS failed");
+  }
+
   const buffer = await response.arrayBuffer();
   fs.writeFileSync(outputPath, Buffer.from(buffer));
+
+  console.log("Voice generated");
 }
 
-// --- main route ---
+//////////////////////////////
+// 🚀 MAIN ROUTE
+//////////////////////////////
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -76,9 +107,12 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("SCRIPT:", script);
 
-    // 🔥 generate clips
+    //////////////////////////////
+    // 🎬 CREATE CLIPS
+    //////////////////////////////
     for (let i = 0; i < script.length; i++) {
       const videoUrl = videos[i % videos.length];
+
       const inputPath = `${TEMP_DIR}/input_${i}.mp4`;
       const outputPath = `${TEMP_DIR}/clip_${i}.mp4`;
 
@@ -96,16 +130,16 @@ app.post("/generate-video", async (req, res) => {
 
       await new Promise((resolve, reject) => {
         ffmpeg(inputPath)
+          .videoCodec("libx264") // 🔥 force re-encode
           .setStartTime(0)
           .setDuration(4)
           .videoFilters([
-            `scale=720:1280`,
-            `${textFilter}`
+            "scale=720:1280",
+            textFilter
           ])
           .outputOptions([
-            "-c:v libx264",
-            "-preset fast",
-            "-crf 23",
+            "-preset veryfast",
+            "-crf 28",
             "-pix_fmt yuv420p"
           ])
           .save(outputPath)
@@ -118,8 +152,11 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("CLIPS:", clips);
 
-    // 🔥 concat clips
+    //////////////////////////////
+    // 🔗 CONCAT
+    //////////////////////////////
     const listFile = `${TEMP_DIR}/list.txt`;
+
     fs.writeFileSync(
       listFile,
       clips.map(c => `file '${c}'`).join("\n")
@@ -137,13 +174,17 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    // 🔥 generate voice
+    //////////////////////////////
+    // 🔊 VOICE
+    //////////////////////////////
     const fullScript = script.join(". ");
     const audioPath = `${TEMP_DIR}/voice.mp3`;
 
     await generateVoice(fullScript, audioPath);
 
-    // 🔥 merge audio + video
+    //////////////////////////////
+    // 🎥 FINAL MERGE
+    //////////////////////////////
     const finalVideo = `${TEMP_DIR}/final.mp4`;
 
     await new Promise((resolve, reject) => {
@@ -159,12 +200,14 @@ app.post("/generate-video", async (req, res) => {
         .on("error", reject);
     });
 
-    // 🔥 send file
+    //////////////////////////////
+    // 📤 SEND
+    //////////////////////////////
     res.sendFile(finalVideo);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Error generating video");
+    console.error("ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
