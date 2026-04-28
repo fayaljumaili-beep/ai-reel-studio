@@ -18,58 +18,62 @@ const CLIPS = [
 
 const OUTPUT = path.join(process.cwd(), "server/output.mp4");
 
+// Health check (optional but useful)
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
+
 app.get("/generate-video", async (req, res) => {
   console.log("🎬 HIT /generate-video");
 
-  // ✅ Check files exist
-  for (const clip of CLIPS) {
-    if (!fs.existsSync(clip)) {
-      console.error("❌ Missing file:", clip);
-      return res.status(500).send(`Missing file: ${clip}`);
-    }
-  }
-
   try {
+    // ✅ Check files exist
+    for (const clip of CLIPS) {
+      if (!fs.existsSync(clip)) {
+        console.error("❌ Missing file:", clip);
+        return res.status(500).send(`Missing file: ${clip}`);
+      }
+    }
+
+    // ✅ Remove old output if exists
+    if (fs.existsSync(OUTPUT)) {
+      fs.unlinkSync(OUTPUT);
+    }
+
     const command = ffmpeg();
 
     // Add inputs
     CLIPS.forEach((clip) => command.input(clip));
 
-    // 🔥 Bulletproof normalize + concat
-    const filter = `
-      ${CLIPS.map((_, i) => `[${i}:v]scale=720:1280,setsar=1[v${i}]`).join(";")};
-      ${CLIPS.map((_, i) => `[v${i}]`).join("")}concat=n=${CLIPS.length}:v=1:a=0[outv]
-    `;
-
     command
-      .outputOptions([
-        "-filter_complex", filter,
-        "-map", "[outv]",
-        "-preset", "veryfast",
-        "-crf", "23",
-      ])
       .on("start", (cmd) => {
         console.log("🚀 FFmpeg started:", cmd);
       })
       .on("error", (err) => {
         console.error("❌ FFmpeg error:", err.message);
         if (!res.headersSent) {
-          res.status(500).send(err.message);
+          res.status(500).send("FFmpeg failed");
         }
       })
       .on("end", () => {
-        console.log("✅ Video created");
+        console.log("✅ Video generated");
+
+        if (!fs.existsSync(OUTPUT)) {
+          return res.status(500).send("Output not found");
+        }
+
         res.sendFile(OUTPUT);
       })
-      .save(OUTPUT);
+
+      // 🔥 SIMPLE CONCAT (NO FILTERS)
+      .mergeToFile(OUTPUT);
 
   } catch (err) {
     console.error("❌ Server error:", err);
-    res.status(500).send("Server error");
+    res.status(500).send("Server failed");
   }
 });
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log("NEW VERSION DEPLOYED");
 });
