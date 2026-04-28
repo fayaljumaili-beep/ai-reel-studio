@@ -18,9 +18,9 @@ const ASSETS = `${process.cwd()}/server/assets`;
 
 // ✅ LOCAL VIDEO FILES
 const LOCAL_VIDEOS = [
-  `${ASSETS}/clip-0.mp4`,
-  `${ASSETS}/clip-1.mp4`,
-  `${ASSETS}/clip-2.mp4`
+  "server/assets/videos/video1.mp4",
+  "server/assets/videos/video2.mp4",
+  "server/assets/videos/video3.mp4"
 ];
 
 // ✅ OUTPUT PATH
