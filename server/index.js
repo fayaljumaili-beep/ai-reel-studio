@@ -10,9 +10,9 @@ const PORT = process.env.PORT || 8080;
 
 // Absolute paths (Railway-safe)
 const CLIPS = [
-  path.join(process.cwd(), "server/assets/videos/video1.mp4"),
-  path.join(process.cwd(), "server/assets/videos/video2.mp4"),
-  path.join(process.cwd(), "server/assets/videos/video3.mp4"),
+  path.join(process.cwd(), "server/assets/clip-0.mp4"),
+  path.join(process.cwd(), "server/assets/clip-1.mp4"),
+  path.join(process.cwd(), "server/assets/clip-2.mp4"),
 ];
 
 const MUSIC = path.join(process.cwd(), "server/assets/music.mp3");
