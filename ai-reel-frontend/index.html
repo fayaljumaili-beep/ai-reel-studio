@@ -1,0 +1,123 @@
+<!-- TEST CHANGE -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Reel Studio v999</title>
+
+  <style>
+    body {
+      background: black;
+      color: white;
+      font-family: Arial;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      text-align: center;
+      padding: 30px;
+      border-radius: 20px;
+      background: #111;
+      box-shadow: 0 0 30px rgba(255,0,150,0.3);
+    }
+
+    input {
+      width: 300px;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(90deg, pink, purple);
+      color: white;
+      cursor: pointer;
+    }
+
+    video {
+      margin-top: 20px;
+      width: 300px;
+    }
+
+    pre {
+      text-align: left;
+      background: #222;
+      padding: 10px;
+      border-radius: 10px;
+      max-width: 300px;
+      overflow: auto;
+      font-size: 12px;
+      color: #ff8080;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h1>AI Reel Studio</h1>
+
+  <input id="prompt" placeholder="Enter idea..." />
+  <br />
+
+  <button id="generateBtn">Generate</button>
+
+  <p id="status"></p>
+
+  <video id="video" controls></video>
+
+  <!-- 🔥 ERROR OUTPUT -->
+  <pre id="errorBox"></pre>
+</div>
+
+<script>
+  const API_URL = "https://ai-reel-studio-production.up.railway.app?v=2";
+
+  const button = document.getElementById("generateBtn");
+  const status = document.getElementById("status");
+  const video = document.getElementById("video");
+  const errorBox = document.getElementById("errorBox");
+
+  button.onclick = async () => {
+    try {
+      status.innerText = "⏳ Generating video...";
+      errorBox.innerText = "";
+      video.src = "";
+      button.disabled = true;
+
+      console.log("CALLING:", `${API_URL}/generate-video`);
+
+      const res = await fetch(`${API_URL}/generate-video`);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Request failed");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      video.src = url;
+      status.innerText = "✅ Done!";
+    } catch (err) {
+      console.error(err);
+
+      // 🔥 SHOW FULL ERROR
+      errorBox.innerText = err.message;
+
+      status.innerText = "❌ Failed";
+    } finally {
+      button.disabled = false;
+    }
+  };
+</script>
+
+</body>
+</html>
