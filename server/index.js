@@ -24,7 +24,7 @@ const LOCAL_VIDEOS = [
 ];
 
 // 🎵 BACKGROUND MUSIC
-const MUSIC_FILE = `${process.cwd()}/server/music.mp3`;
+const MUSIC_FILE = `${process.cwd()}/server/assets/music.mp3`;
 
 //////////////////////////////////////////////////////
 // 🧠 SCRIPT
