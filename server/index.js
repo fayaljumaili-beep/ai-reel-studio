@@ -63,9 +63,23 @@ function mergeVideos(output) {
     LOCAL_VIDEOS.forEach(v => command.input(v));
 
     command
+      .complexFilter([
+        // scale all videos to same size
+        ...LOCAL_VIDEOS.map((_, i) => `[${i}:v]scale=720:1280,setdar=9/16[v${i}]`),
+
+        // concat video streams
+        `${LOCAL_VIDEOS.map((_, i) => `[v${i}]`).join("")}concat=n=${LOCAL_VIDEOS.length}:v=1:a=0[vout]`
+      ])
+
+      .outputOptions([
+        "-map [vout]",
+        "-r 30",
+        "-pix_fmt yuv420p"
+      ])
+
       .on("end", resolve)
       .on("error", reject)
-      .mergeToFile(output, TEMP_DIR);
+      .save(output);
   });
 }
 
