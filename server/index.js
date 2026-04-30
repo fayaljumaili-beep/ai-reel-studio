@@ -93,18 +93,46 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 🧠 VIRAL SUBTITLES (NEW)
+    // 🧠 SMART VIRAL SUBTITLES
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
+    const powerWords = [
+      "YOU", "NOW", "STOP", "START",
+      "MONEY", "SUCCESS", "RICH",
+      "CRAZY", "FOCUS", "DISCIPLINE"
+    ];
+
     const words = cleanScript.split(/\s+/);
 
-    const chunkSize = 3;
     const chunks = [];
+    let current = "";
 
-    for (let i = 0; i < words.length; i += chunkSize) {
-      chunks.push(words.slice(i, i + chunkSize).join(" "));
+    for (let i = 0; i < words.length; i++) {
+      let word = words[i].toUpperCase();
+
+      // isolate power words
+      if (powerWords.includes(word)) {
+        if (current) {
+          chunks.push(current.trim());
+          current = "";
+        }
+        chunks.push(word);
+        continue;
+      }
+
+      // build chunk (max 3 words)
+      if (!current) {
+        current = word;
+      } else if (current.split(" ").length < 3) {
+        current += " " + word;
+      } else {
+        chunks.push(current.trim());
+        current = word;
+      }
     }
+
+    if (current) chunks.push(current.trim());
 
     const totalDuration = 30;
     const perChunk = totalDuration / chunks.length;
@@ -125,7 +153,7 @@ app.get("/generate", async (req, res) => {
 
       srt += `${i + 1}\n`;
       srt += `${format(start)} --> ${format(end)}\n`;
-      srt += `${chunk.toUpperCase()}\n\n`;
+      srt += `${chunk}\n\n`;
     });
 
     fs.writeFileSync(subtitleFile, srt);
@@ -163,14 +191,16 @@ app.get("/generate", async (req, res) => {
     );
 
     // =========================
-    // 🔊 FINAL OUTPUT (UPGRADED STYLE)
+    // 🔊 FINAL OUTPUT
     // =========================
     const finalOutput = path.join(__dirname, "output.mp4");
 
-    const safeSubtitle = subtitleFile.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+    const safeSubtitle = subtitleFile
+      .replace(/\\/g, "\\\\")
+      .replace(/:/g, "\\:");
 
     await run(
-      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=4,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
+      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=44,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=5,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
     // =========================
