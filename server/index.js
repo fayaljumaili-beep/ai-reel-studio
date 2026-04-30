@@ -10,12 +10,13 @@ app.get("/generate", async (req, res) => {
   try {
     const output = "output.mp4";
 
-    // 👇 Your input clips (adjust if needed)
-    const clips = [
-      "assets/videos/clip-0.mp4",
-      "assets/videos/clip-1.mp4",
-      "assets/videos/clip-2.mp4"
-    ];
+   const __dirname = new URL('.', import.meta.url).pathname;
+
+const clips = [
+  path.join(__dirname, "assets/videos/clip-0.mp4"),
+  path.join(__dirname, "assets/videos/clip-1.mp4"),
+  path.join(__dirname, "assets/videos/clip-2.mp4")
+];
 
     // 🔥 Step 1: normalize all clips
     const normalized = clips.map((_, i) => `temp${i}.mp4`);
