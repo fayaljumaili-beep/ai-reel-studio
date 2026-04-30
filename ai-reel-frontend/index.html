@@ -1,5 +1,5 @@
 <!-- trigger redeploy -->
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -12,8 +12,9 @@
       font-family: Arial;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
       min-height: 100vh;
+      padding: 40px 0;
     }
 
     .container {
@@ -42,13 +43,13 @@
       cursor: pointer;
     }
 
-    #videos {
+    .videos {
       margin-top: 20px;
     }
 
     video {
       width: 100%;
-      margin-bottom: 15px;
+      margin-top: 15px;
       border-radius: 10px;
     }
 
@@ -67,78 +68,80 @@
 <div class="container">
   <h1>AI Reel Studio</h1>
 
-  <input id="prompt" placeholder="Enter your niche (e.g. money, fitness)" />
+  <input id="prompt" placeholder="Enter a niche (money, fitness...)" />
   <br>
-  <button id="generateBtn">Generate Batch</button>
+  <button id="generateBtn">Generate</button>
 
   <p id="status"></p>
-  <div id="videos"></div>
+  <div id="videos" class="videos"></div>
   <pre id="errorBox"></pre>
 </div>
 
 <script>
-  const API_URL = "https://ai-reel-studio-production.up.railway.app";
+const API_URL = "https://ai-reel-studio-production.up.railway.app";
 
-  const button = document.getElementById("generateBtn");
-  const status = document.getElementById("status");
-  const videosContainer = document.getElementById("videos");
-  const errorBox = document.getElementById("errorBox");
+const button = document.getElementById("generateBtn");
+const status = document.getElementById("status");
+const videosContainer = document.getElementById("videos");
+const errorBox = document.getElementById("errorBox");
 
-  button.onclick = async () => {
-    try {
-      const prompt = document.getElementById("prompt").value;
+button.onclick = async () => {
+  try {
+    const prompt = document.getElementById("prompt").value;
 
-      if (!prompt) {
-        alert("Enter a niche (money, fitness, etc)");
-        return;
-      }
+    if (!prompt) {
+      alert("Enter a niche (money, fitness, etc)");
+      return;
+    }
 
-      status.innerText = "⏳ Generating batch...";
-      errorBox.innerText = "";
-      videosContainer.innerHTML = "";
-      button.disabled = true;
+    status.innerText = "🔥 Generating batch...";
+    errorBox.innerText = "";
+    videosContainer.innerHTML = "";
+    button.disabled = true;
 
-      // 🔥 STEP 1: get batch URLs
-      const res = await fetch(
-        `${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`
+    // ✅ STEP 1: get batch list
+    const res = await fetch(
+      `${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`
+    );
+
+    if (!res.ok) {
+      throw new Error("Batch request failed");
+    }
+
+    const data = await res.json();
+
+    // expected: { prompts: ["...", "...", "..."] }
+    const prompts = data.prompts || [];
+
+    // ✅ STEP 2: generate each video
+    for (let i = 0; i < prompts.length; i++) {
+      status.innerText = `🎬 Generating video ${i + 1}/${prompts.length}...`;
+
+      const videoRes = await fetch(
+        `${API_URL}/generate?prompt=${encodeURIComponent(prompts[i])}`
       );
 
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
+      if (!videoRes.ok) continue;
 
-      const data = await res.json();
+      const blob = await videoRes.blob();
+      const url = URL.createObjectURL(blob);
 
-      // 🔥 STEP 2: render videos one by one
-      for (const url of data.videos) {
-        const wrapper = document.createElement("div");
+      const video = document.createElement("video");
+      video.src = url;
+      video.controls = true;
 
-        const vid = document.createElement("video");
-        vid.controls = true;
-        vid.src = API_URL + url + "&t=" + Date.now();
-
-        const label = document.createElement("p");
-        label.innerText = "🎬 Generating...";
-
-        wrapper.appendChild(label);
-        wrapper.appendChild(vid);
-        videosContainer.appendChild(wrapper);
-
-        // when video loads
-        vid.onloadeddata = () => {
-          label.innerText = "✅ Ready";
-        };
-      }
-
-      status.innerText = "🔥 Batch loaded!";
-    } catch (err) {
-      console.error(err);
-      errorBox.innerText = err.message;
-      status.innerText = "❌ Failed";
-    } finally {
-      button.disabled = false;
+      videosContainer.appendChild(video);
     }
-  };
+
+    status.innerText = "✅ Done!";
+  } catch (err) {
+    console.error(err);
+    errorBox.innerText = err.message;
+    status.innerText = "❌ Failed";
+  } finally {
+    button.disabled = false;
+  }
+};
 </script>
 
 </body>
