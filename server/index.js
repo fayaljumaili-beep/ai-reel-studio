@@ -15,7 +15,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// fix __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -41,7 +40,7 @@ app.get("/generate", async (req, res) => {
     console.log("🎯 Prompt:", prompt);
 
     // =========================
-    // 🤖 1. AI SCRIPT
+    // 🤖 AI SCRIPT
     // =========================
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -49,7 +48,7 @@ app.get("/generate", async (req, res) => {
         {
           role: "system",
           content:
-            "Create a viral TikTok script. ONLY return spoken dialogue. No scene directions, no brackets, no labels.",
+            "Create a viral TikTok script. ONLY return spoken dialogue. No scene directions.",
         },
         {
           role: "user",
@@ -60,20 +59,17 @@ app.get("/generate", async (req, res) => {
 
     const rawScript = completion.choices[0].message.content;
 
-    // =========================
-    // 🧼 CLEAN SCRIPT (CRITICAL FIX)
-    // =========================
     const cleanScript = rawScript
-      .replace(/\[.*?\]/g, "")        // remove [scene stuff]
-      .replace(/\*\*.*?\*\*/g, "")    // remove **markdown**
-      .replace(/Speaker:|Host:/gi, "") 
+      .replace(/\[.*?\]/g, "")
+      .replace(/\*\*.*?\*\*/g, "")
+      .replace(/Speaker:|Host:/gi, "")
       .replace(/\n+/g, " ")
       .trim();
 
     console.log("🔥 CLEAN SCRIPT:\n", cleanScript);
 
     // =========================
-    // 🎤 2. VOICE
+    // 🎤 VOICE
     // =========================
     const audioFile = path.join(__dirname, "voice.mp3");
 
@@ -97,16 +93,21 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 📝 3. CREATE SUBTITLES
+    // 🧠 VIRAL SUBTITLES (NEW)
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
-    let lines = cleanScript.split(/[.!?]/).filter((l) => l.trim());
+    const words = cleanScript.split(/\s+/);
 
-    if (lines.length === 0) lines = [cleanScript];
+    const chunkSize = 3;
+    const chunks = [];
 
-    const duration = 30;
-    const perLine = duration / lines.length;
+    for (let i = 0; i < words.length; i += chunkSize) {
+      chunks.push(words.slice(i, i + chunkSize).join(" "));
+    }
+
+    const totalDuration = 30;
+    const perChunk = totalDuration / chunks.length;
 
     let srt = "";
 
@@ -114,22 +115,23 @@ app.get("/generate", async (req, res) => {
       const h = String(Math.floor(t / 3600)).padStart(2, "0");
       const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
       const s = String(Math.floor(t % 60)).padStart(2, "0");
-      return `${h}:${m}:${s},000`;
+      const ms = String(Math.floor((t % 1) * 1000)).padStart(3, "0");
+      return `${h}:${m}:${s},${ms}`;
     };
 
-    lines.forEach((line, i) => {
-      const start = i * perLine;
-      const end = (i + 1) * perLine;
+    chunks.forEach((chunk, i) => {
+      const start = i * perChunk;
+      const end = (i + 1) * perChunk;
 
       srt += `${i + 1}\n`;
       srt += `${format(start)} --> ${format(end)}\n`;
-      srt += `${line.trim()}\n\n`;
+      srt += `${chunk.toUpperCase()}\n\n`;
     });
 
     fs.writeFileSync(subtitleFile, srt);
 
     // =========================
-    // 🎬 4. VIDEO CLIPS
+    // 🎬 VIDEO
     // =========================
     const clips = [
       path.join(__dirname, "assets/videos/clip-0.mp4"),
@@ -147,9 +149,6 @@ app.get("/generate", async (req, res) => {
       );
     }
 
-    // =========================
-    // 📄 5. CONCAT
-    // =========================
     const listFile = path.join(__dirname, "list.txt");
 
     fs.writeFileSync(
@@ -164,16 +163,18 @@ app.get("/generate", async (req, res) => {
     );
 
     // =========================
-    // 🔊 6. FINAL VIDEO (AUDIO + SUBS)
+    // 🔊 FINAL OUTPUT (UPGRADED STYLE)
     // =========================
     const finalOutput = path.join(__dirname, "output.mp4");
 
+    const safeSubtitle = subtitleFile.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+
     await run(
-      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles=${subtitleFile}:force_style='Fontsize=32,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=3,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
+      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=4,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
     // =========================
-    // 🧹 CLEANUP
+    // CLEANUP
     // =========================
     normalized.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
     fs.existsSync(listFile) && fs.unlinkSync(listFile);
@@ -181,9 +182,6 @@ app.get("/generate", async (req, res) => {
     fs.existsSync(mergedVideo) && fs.unlinkSync(mergedVideo);
     fs.existsSync(subtitleFile) && fs.unlinkSync(subtitleFile);
 
-    // =========================
-    // 🚀 RESPONSE
-    // =========================
     res.sendFile(finalOutput);
 
   } catch (err) {
