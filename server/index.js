@@ -7,7 +7,7 @@ import OpenAI from "openai";
 import axios from "axios";
 import { fileURLToPath } from "url";
 
-console.log("🔥 CLEAN STABLE VERSION DEPLOYED");
+console.log("🔥 HOOK SYSTEM VERSION DEPLOYED");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +41,20 @@ app.get("/generate", async (req, res) => {
     console.log("🎯 Prompt:", prompt);
 
     // =========================
+    // 🧠 HOOK SYSTEM (NEW)
+    // =========================
+    const hooks = [
+      "Stop scrolling. This will change how you think.",
+      "Nobody tells you this, but listen closely.",
+      "You're wasting time if you don't understand this.",
+      "This is exactly why you're stuck right now.",
+      "If you hear this, pay attention.",
+    ];
+
+    const randomHook =
+      hooks[Math.floor(Math.random() * hooks.length)];
+
+    // =========================
     // 🤖 AI SCRIPT
     // =========================
     const completion = await openai.chat.completions.create({
@@ -48,12 +62,20 @@ app.get("/generate", async (req, res) => {
       messages: [
         {
           role: "system",
-          content:
-            "Create a viral TikTok script. ONLY return spoken dialogue. No scene directions. Short punchy lines.",
+          content: `
+You create viral TikTok scripts.
+
+RULES:
+- First line MUST be a strong hook
+- Short punchy lines
+- No scene directions
+- No brackets
+- Only spoken dialogue
+          `,
         },
         {
           role: "user",
-          content: `Create a 20-30 second viral video script about: ${prompt}`,
+          content: `${randomHook} Continue with a viral 20-30 second script about: ${prompt}`,
         },
       ],
     });
@@ -72,7 +94,7 @@ app.get("/generate", async (req, res) => {
     console.log("🔥 CLEAN SCRIPT:\n", cleanScript);
 
     // =========================
-    // 🎤 VOICE (ElevenLabs)
+    // 🎤 VOICE
     // =========================
     const audioFile = path.join(__dirname, "voice.mp3");
 
@@ -96,7 +118,7 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 🧠 SMART VIRAL SUBTITLES
+    // 🧠 SUBTITLES (chunk style)
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
@@ -133,7 +155,7 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(subtitleFile, srt);
 
     // =========================
-    // 🎬 VIDEO CLIPS
+    // 🎬 VIDEO
     // =========================
     const clips = [
       path.join(__dirname, "assets/videos/clip-0.mp4"),
@@ -155,9 +177,6 @@ app.get("/generate", async (req, res) => {
       );
     }
 
-    // =========================
-    // 📄 CONCAT
-    // =========================
     const listFile = path.join(__dirname, "list.txt");
 
     fs.writeFileSync(
@@ -185,7 +204,7 @@ app.get("/generate", async (req, res) => {
     );
 
     // =========================
-    // 🧹 CLEANUP
+    // CLEANUP
     // =========================
     [audioFile, mergedVideo, subtitleFile, listFile, ...normalized].forEach(
       (f) => {
@@ -193,9 +212,6 @@ app.get("/generate", async (req, res) => {
       }
     );
 
-    // =========================
-    // 🚀 RESPONSE
-    // =========================
     res.sendFile(finalOutput);
 
   } catch (err) {
