@@ -93,41 +93,47 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 🧠 WORD-BY-WORD SUBTITLES
-    // =========================
-    const subtitleFile = path.join(__dirname, "subtitles.srt");
+// 🧠 PERFECT SYNC SUBTITLES (WHISPER)
+// =========================
+const subtitleFile = path.join(__dirname, "subtitles.srt");
 
-    const words = cleanScript.split(/\s+/).filter(Boolean);
+// transcribe audio with timestamps
+const transcription = await openai.audio.transcriptions.create({
+  file: fs.createReadStream(audioFile),
+  model: "gpt-4o-mini-transcribe",
+  response_format: "verbose_json",
+});
 
-    const totalDuration = 30;
-    const perWord = totalDuration / words.length;
+const words = transcription.words;
 
-    let srt = "";
+let srt = "";
 
-    const format = (t) => {
-      const h = String(Math.floor(t / 3600)).padStart(2, "0");
-      const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
-      const s = String(Math.floor(t % 60)).padStart(2, "0");
-      const ms = String(Math.floor((t % 1) * 1000)).padStart(3, "0");
-      return `${h}:${m}:${s},${ms}`;
-    };
+const format = (t) => {
+  const h = String(Math.floor(t / 3600)).padStart(2, "0");
+  const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
+  const s = String(Math.floor(t % 60)).padStart(2, "0");
+  const ms = String(Math.floor((t % 1) * 1000)).padStart(3, "0");
+  return `${h}:${m}:${s},${ms}`;
+};
 
-    words.forEach((word, i) => {
-      const start = i * perWord;
-      const end = (i + 1) * perWord;
+words.forEach((w, i) => {
+  const start = w.start;
+  const end = w.end;
 
-      // highlight every 3rd word (simple viral effect)
-      const styledWord =
-        i % 3 === 0
-          ? `{\\c&H00FFFF&}${word.toUpperCase()}`
-          : word.toUpperCase();
+  const word = w.word.toUpperCase();
 
-      srt += `${i + 1}\n`;
-      srt += `${format(start)} --> ${format(end)}\n`;
-      srt += `${styledWord}\n\n`;
-    });
+  // highlight every 3rd word
+  const styled =
+    i % 3 === 0
+      ? `{\\c&H00FFFF&}${word}`
+      : word;
 
-    fs.writeFileSync(subtitleFile, srt);
+  srt += `${i + 1}\n`;
+  srt += `${format(start)} --> ${format(end)}\n`;
+  srt += `${styled}\n\n`;
+});
+
+fs.writeFileSync(subtitleFile, srt);
 
     // =========================
     // 🎬 VIDEO
