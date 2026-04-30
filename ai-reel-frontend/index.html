@@ -12,7 +12,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
     }
 
     .container {
@@ -21,6 +21,7 @@
       border-radius: 20px;
       background: #111;
       box-shadow: 0 0 30px rgba(255,0,150,0.3);
+      width: 350px;
     }
 
     input {
@@ -40,9 +41,14 @@
       cursor: pointer;
     }
 
-    video {
+    #videos {
       margin-top: 20px;
-      width: 300px;
+    }
+
+    video {
+      width: 100%;
+      margin-bottom: 15px;
+      border-radius: 10px;
     }
 
     pre {
@@ -50,7 +56,6 @@
       color: red;
       font-size: 12px;
       text-align: left;
-      max-width: 300px;
       overflow: auto;
     }
   </style>
@@ -61,19 +66,21 @@
 <div class="container">
   <h1>AI Reel Studio</h1>
 
-  <input id="prompt" placeholder="Enter your idea..." />
+  <input id="prompt" placeholder="Enter your niche (e.g. money, fitness)" />
   <br>
-  <button id="generateBtn">Generate</button>
+  <button id="generateBtn">Generate Batch</button>
 
   <p id="status"></p>
-  <video id="video" controls></video>
+  <div id="videos"></div>
   <pre id="errorBox"></pre>
 </div>
 
 <script>
+  const API_URL = "https://ai-reel-studio-production.up.railway.app";
+
   const button = document.getElementById("generateBtn");
   const status = document.getElementById("status");
-  const video = document.getElementById("video");
+  const videosContainer = document.getElementById("videos");
   const errorBox = document.getElementById("errorBox");
 
   button.onclick = async () => {
@@ -81,29 +88,48 @@
       const prompt = document.getElementById("prompt").value;
 
       if (!prompt) {
-        alert("Enter a prompt");
+        alert("Enter a niche (money, fitness, etc)");
         return;
       }
 
-      status.innerText = "⏳ Generating...";
+      status.innerText = "⏳ Generating batch...";
       errorBox.innerText = "";
-      video.src = "";
+      videosContainer.innerHTML = "";
       button.disabled = true;
 
-      // ✅ FIXED: GET request (NO POST)
+      // 🔥 STEP 1: get batch URLs
       const res = await fetch(
-        "https://ai-reel-studio-production.up.railway.app/generate?t=" + Date.now()
+        `${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`
       );
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Request failed");
+        throw new Error(await res.text());
       }
 
-      const blob = await res.blob();
-      video.src = URL.createObjectURL(blob);
+      const data = await res.json();
 
-      status.innerText = "✅ Done!";
+      // 🔥 STEP 2: render videos one by one
+      for (const url of data.videos) {
+        const wrapper = document.createElement("div");
+
+        const vid = document.createElement("video");
+        vid.controls = true;
+        vid.src = API_URL + url + "&t=" + Date.now();
+
+        const label = document.createElement("p");
+        label.innerText = "🎬 Generating...";
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(vid);
+        videosContainer.appendChild(wrapper);
+
+        // when video loads
+        vid.onloadeddata = () => {
+          label.innerText = "✅ Ready";
+        };
+      }
+
+      status.innerText = "🔥 Batch loaded!";
     } catch (err) {
       console.error(err);
       errorBox.innerText = err.message;
