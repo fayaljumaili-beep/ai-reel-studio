@@ -48,7 +48,7 @@ app.get("/generate", async (req, res) => {
         {
           role: "system",
           content:
-            "Create a viral TikTok script. ONLY return spoken dialogue. No scene directions.",
+            "Create a viral TikTok script. ONLY spoken dialogue. No brackets or labels.",
         },
         {
           role: "user",
@@ -93,49 +93,14 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 🧠 SMART VIRAL SUBTITLES
+    // 🧠 WORD-BY-WORD SUBTITLES
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
-    const powerWords = [
-      "YOU", "NOW", "STOP", "START",
-      "MONEY", "SUCCESS", "RICH",
-      "CRAZY", "FOCUS", "DISCIPLINE"
-    ];
-
-    const words = cleanScript.split(/\s+/);
-
-    const chunks = [];
-    let current = "";
-
-    for (let i = 0; i < words.length; i++) {
-      let word = words[i].toUpperCase();
-
-      // isolate power words
-      if (powerWords.includes(word)) {
-        if (current) {
-          chunks.push(current.trim());
-          current = "";
-        }
-        chunks.push(word);
-        continue;
-      }
-
-      // build chunk (max 3 words)
-      if (!current) {
-        current = word;
-      } else if (current.split(" ").length < 3) {
-        current += " " + word;
-      } else {
-        chunks.push(current.trim());
-        current = word;
-      }
-    }
-
-    if (current) chunks.push(current.trim());
+    const words = cleanScript.split(/\s+/).filter(Boolean);
 
     const totalDuration = 30;
-    const perChunk = totalDuration / chunks.length;
+    const perWord = totalDuration / words.length;
 
     let srt = "";
 
@@ -147,13 +112,19 @@ app.get("/generate", async (req, res) => {
       return `${h}:${m}:${s},${ms}`;
     };
 
-    chunks.forEach((chunk, i) => {
-      const start = i * perChunk;
-      const end = (i + 1) * perChunk;
+    words.forEach((word, i) => {
+      const start = i * perWord;
+      const end = (i + 1) * perWord;
+
+      // highlight every 3rd word (simple viral effect)
+      const styledWord =
+        i % 3 === 0
+          ? `{\\c&H00FFFF&}${word.toUpperCase()}`
+          : word.toUpperCase();
 
       srt += `${i + 1}\n`;
       srt += `${format(start)} --> ${format(end)}\n`;
-      srt += `${chunk}\n\n`;
+      srt += `${styledWord}\n\n`;
     });
 
     fs.writeFileSync(subtitleFile, srt);
@@ -200,7 +171,7 @@ app.get("/generate", async (req, res) => {
       .replace(/:/g, "\\:");
 
     await run(
-      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=44,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=5,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
+      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=48,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=6,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
     // =========================
