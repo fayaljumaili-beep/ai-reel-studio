@@ -2,8 +2,11 @@ import express from "express";
 import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
+
 const PORT = process.env.PORT || 3000;
 
 app.get("/generate", async (req, res) => {
