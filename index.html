@@ -117,9 +117,7 @@ button.onclick = async () => {
     for (let i = 0; i < prompts.length; i++) {
       status.innerText = `🎬 Generating video ${i + 1}/${prompts.length}...`;
 
-      const videoRes = await fetch(
-        `${API_URL}/generate?prompt=${encodeURIComponent(prompts[i])}`
-      );
+      const videoRes = await fetch(`${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`);
 
       if (!videoRes.ok) continue;
 
