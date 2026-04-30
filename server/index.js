@@ -7,7 +7,7 @@ import OpenAI from "openai";
 import axios from "axios";
 import { fileURLToPath } from "url";
 
-console.log("🔥 HOOK SYSTEM VERSION DEPLOYED");
+console.log("🔥 AUTO NICHE MODE DEPLOYED");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,13 +35,34 @@ const run = (cmd) =>
     });
   });
 
+// =========================
+// 🧠 NICHE SYSTEM (NEW)
+// =========================
+const niches = {
+  money: "how to make money, financial freedom, getting rich",
+  fitness: "gym motivation, discipline, workout mindset",
+  mindset: "success mindset, discipline, self improvement",
+  dating: "dating advice, confidence, attraction",
+  business: "entrepreneurship, startups, making money online",
+};
+
+// =========================
+// 🎬 MAIN GENERATOR
+// =========================
 app.get("/generate", async (req, res) => {
   try {
-    const prompt = req.query.prompt || "success mindset";
+    const niche = req.query.niche || null;
+    const basePrompt = req.query.prompt || null;
+
+    const prompt =
+      basePrompt ||
+      niches[niche] ||
+      "success mindset";
+
     console.log("🎯 Prompt:", prompt);
 
     // =========================
-    // 🧠 HOOK SYSTEM (NEW)
+    // 🧠 HOOK SYSTEM
     // =========================
     const hooks = [
       "Stop scrolling. This will change how you think.",
@@ -69,7 +90,6 @@ RULES:
 - First line MUST be a strong hook
 - Short punchy lines
 - No scene directions
-- No brackets
 - Only spoken dialogue
           `,
         },
@@ -118,7 +138,7 @@ RULES:
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 🧠 SUBTITLES (chunk style)
+    // 🧠 SUBTITLES
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
@@ -203,13 +223,9 @@ RULES:
       `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles='${safeSubtitle}':force_style='Fontsize=44,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=5,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
-    // =========================
-    // CLEANUP
-    // =========================
+    // cleanup
     [audioFile, mergedVideo, subtitleFile, listFile, ...normalized].forEach(
-      (f) => {
-        if (fs.existsSync(f)) fs.unlinkSync(f);
-      }
+      (f) => fs.existsSync(f) && fs.unlinkSync(f)
     );
 
     res.sendFile(finalOutput);
@@ -218,6 +234,29 @@ RULES:
     console.error("❌ ERROR:", err);
     res.status(500).send(err.message);
   }
+});
+
+// =========================
+// 🔥 BATCH GENERATOR (NEW)
+// =========================
+app.get("/generate-batch", (req, res) => {
+  const niche = req.query.niche || "mindset";
+
+  const prompts = [
+    "big mistake",
+    "what nobody tells you",
+    "why you're stuck",
+    "how to win",
+    "truth about success",
+  ];
+
+  const results = prompts.map((p) => {
+    return `/generate?niche=${niche}&prompt=${encodeURIComponent(
+      niches[niche] + " " + p
+    )}`;
+  });
+
+  res.json({ videos: results });
 });
 
 app.listen(PORT, () => {
