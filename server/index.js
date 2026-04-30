@@ -49,7 +49,7 @@ app.get("/generate", async (req, res) => {
         {
           role: "system",
           content:
-            "You create short viral TikTok/Reels scripts with strong hooks and short punchy lines.",
+            "Create a viral TikTok script. ONLY return spoken dialogue. No scene directions, no brackets, no labels.",
         },
         {
           role: "user",
@@ -58,8 +58,19 @@ app.get("/generate", async (req, res) => {
       ],
     });
 
-    const script = completion.choices[0].message.content;
-    console.log("🔥 SCRIPT:\n", script);
+    const rawScript = completion.choices[0].message.content;
+
+    // =========================
+    // 🧼 CLEAN SCRIPT (CRITICAL FIX)
+    // =========================
+    const cleanScript = rawScript
+      .replace(/\[.*?\]/g, "")        // remove [scene stuff]
+      .replace(/\*\*.*?\*\*/g, "")    // remove **markdown**
+      .replace(/Speaker:|Host:/gi, "") 
+      .replace(/\n+/g, " ")
+      .trim();
+
+    console.log("🔥 CLEAN SCRIPT:\n", cleanScript);
 
     // =========================
     // 🎤 2. VOICE
@@ -75,7 +86,7 @@ app.get("/generate", async (req, res) => {
       },
       responseType: "arraybuffer",
       data: {
-        text: script,
+        text: cleanScript,
         voice_settings: {
           stability: 0.4,
           similarity_boost: 0.8,
@@ -90,23 +101,25 @@ app.get("/generate", async (req, res) => {
     // =========================
     const subtitleFile = path.join(__dirname, "subtitles.srt");
 
-    const lines = script.split(/[.!?]/).filter((l) => l.trim());
+    let lines = cleanScript.split(/[.!?]/).filter((l) => l.trim());
 
-    const duration = 30; // seconds
+    if (lines.length === 0) lines = [cleanScript];
+
+    const duration = 30;
     const perLine = duration / lines.length;
 
     let srt = "";
 
+    const format = (t) => {
+      const h = String(Math.floor(t / 3600)).padStart(2, "0");
+      const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
+      const s = String(Math.floor(t % 60)).padStart(2, "0");
+      return `${h}:${m}:${s},000`;
+    };
+
     lines.forEach((line, i) => {
       const start = i * perLine;
       const end = (i + 1) * perLine;
-
-      const format = (t) => {
-        const h = String(Math.floor(t / 3600)).padStart(2, "0");
-        const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
-        const s = String(Math.floor(t % 60)).padStart(2, "0");
-        return `${h}:${m}:${s},000`;
-      };
 
       srt += `${i + 1}\n`;
       srt += `${format(start)} --> ${format(end)}\n`;
@@ -156,7 +169,7 @@ app.get("/generate", async (req, res) => {
     const finalOutput = path.join(__dirname, "output.mp4");
 
     await run(
-      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles=${subtitleFile}:force_style='Fontsize=28,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
+      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles=${subtitleFile}:force_style='Fontsize=32,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=3,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
     // =========================
