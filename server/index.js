@@ -15,25 +15,23 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// fix __dirname for ES modules
+// fix __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 🔑 OpenAI
+// OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🎬 helper to run ffmpeg
+// ffmpeg runner
 const run = (cmd) =>
   new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         console.error("FFMPEG ERROR:", stderr);
         reject(err);
-      } else {
-        resolve(stdout);
-      }
+      } else resolve(stdout);
     });
   });
 
@@ -43,7 +41,7 @@ app.get("/generate", async (req, res) => {
     console.log("🎯 Prompt:", prompt);
 
     // =========================
-    // 🤖 STEP 1: AI SCRIPT
+    // 🤖 1. AI SCRIPT
     // =========================
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -51,7 +49,7 @@ app.get("/generate", async (req, res) => {
         {
           role: "system",
           content:
-            "You create short viral TikTok/Reels scripts with strong hooks, short sentences, and emotional impact.",
+            "You create short viral TikTok/Reels scripts with strong hooks and short punchy lines.",
         },
         {
           role: "user",
@@ -64,7 +62,7 @@ app.get("/generate", async (req, res) => {
     console.log("🔥 SCRIPT:\n", script);
 
     // =========================
-    // 🎤 STEP 2: VOICE (ElevenLabs)
+    // 🎤 2. VOICE
     // =========================
     const audioFile = path.join(__dirname, "voice.mp3");
 
@@ -88,7 +86,37 @@ app.get("/generate", async (req, res) => {
     fs.writeFileSync(audioFile, voice.data);
 
     // =========================
-    // 📁 STEP 3: VIDEO CLIPS
+    // 📝 3. CREATE SUBTITLES
+    // =========================
+    const subtitleFile = path.join(__dirname, "subtitles.srt");
+
+    const lines = script.split(/[.!?]/).filter((l) => l.trim());
+
+    const duration = 30; // seconds
+    const perLine = duration / lines.length;
+
+    let srt = "";
+
+    lines.forEach((line, i) => {
+      const start = i * perLine;
+      const end = (i + 1) * perLine;
+
+      const format = (t) => {
+        const h = String(Math.floor(t / 3600)).padStart(2, "0");
+        const m = String(Math.floor((t % 3600) / 60)).padStart(2, "0");
+        const s = String(Math.floor(t % 60)).padStart(2, "0");
+        return `${h}:${m}:${s},000`;
+      };
+
+      srt += `${i + 1}\n`;
+      srt += `${format(start)} --> ${format(end)}\n`;
+      srt += `${line.trim()}\n\n`;
+    });
+
+    fs.writeFileSync(subtitleFile, srt);
+
+    // =========================
+    // 🎬 4. VIDEO CLIPS
     // =========================
     const clips = [
       path.join(__dirname, "assets/videos/clip-0.mp4"),
@@ -100,7 +128,6 @@ app.get("/generate", async (req, res) => {
       path.join(__dirname, `temp${i}.mp4`)
     );
 
-    // normalize clips to same format
     for (let i = 0; i < clips.length; i++) {
       await run(
         `ffmpeg -y -i "${clips[i]}" -vf "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2" -r 30 -preset ultrafast "${normalized[i]}"`
@@ -108,7 +135,7 @@ app.get("/generate", async (req, res) => {
     }
 
     // =========================
-    // 📄 STEP 4: CONCAT
+    // 📄 5. CONCAT
     // =========================
     const listFile = path.join(__dirname, "list.txt");
 
@@ -124,12 +151,12 @@ app.get("/generate", async (req, res) => {
     );
 
     // =========================
-    // 🔊 STEP 5: ADD AUDIO
+    // 🔊 6. FINAL VIDEO (AUDIO + SUBS)
     // =========================
     const finalOutput = path.join(__dirname, "output.mp4");
 
     await run(
-      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -c:v copy -c:a aac -shortest "${finalOutput}"`
+      `ffmpeg -y -i "${mergedVideo}" -i "${audioFile}" -vf "subtitles=${subtitleFile}:force_style='Fontsize=28,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Alignment=2'" -c:v libx264 -c:a aac -shortest "${finalOutput}"`
     );
 
     // =========================
@@ -139,6 +166,7 @@ app.get("/generate", async (req, res) => {
     fs.existsSync(listFile) && fs.unlinkSync(listFile);
     fs.existsSync(audioFile) && fs.unlinkSync(audioFile);
     fs.existsSync(mergedVideo) && fs.unlinkSync(mergedVideo);
+    fs.existsSync(subtitleFile) && fs.unlinkSync(subtitleFile);
 
     // =========================
     // 🚀 RESPONSE
