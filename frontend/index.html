@@ -3,103 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <title>AI Reel Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
     body {
       background: black;
       color: white;
-      font-family: Arial;
-      display: flex;
-      justify-content: center;
-      padding-top: 40px;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
     }
 
-    .container {
-      text-align: center;
-      padding: 30px;
-      border-radius: 20px;
+    .card {
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+      border-radius: 16px;
       background: #111;
-      box-shadow: 0 0 30px rgba(255,0,150,0.3);
-      width: 350px;
+      box-shadow: 0 0 30px rgba(255, 0, 150, 0.3);
     }
 
     input {
-      padding: 10px;
-      width: 250px;
-      border-radius: 10px;
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
       border: none;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
     }
 
     button {
-      padding: 10px 20px;
-      border-radius: 10px;
+      padding: 12px 20px;
       border: none;
-      background: linear-gradient(90deg, pink, purple);
+      border-radius: 8px;
+      background: linear-gradient(90deg, #ff00aa, #6a00ff);
       color: white;
       cursor: pointer;
+      width: 100%;
+      font-size: 16px;
     }
 
     video {
+      margin-top: 20px;
       width: 100%;
-      margin-top: 15px;
       border-radius: 10px;
     }
   </style>
 </head>
-
 <body>
 
-<div class="container">
-  <h1>AI Reel Studio</h1>
+  <div class="card">
+    <h1>AI Reel Studio</h1>
 
-  <input id="prompt" placeholder="Enter a niche..." />
-  <br>
-  <button id="btn">Generate</button>
+    <input id="prompt" placeholder="Enter your idea..." />
 
-  <p id="status"></p>
-  <div id="videos"></div>
-</div>
+    <button onclick="generate()">Generate</button>
 
-<script>
-const API_URL = "https://ai-reel-studio-production.up.railway.app";
+    <p id="status"></p>
 
-const btn = document.getElementById("btn");
-const status = document.getElementById("status");
-const videos = document.getElementById("videos");
+    <video id="video" controls></video>
+  </div>
 
-btn.onclick = async () => {
-  const niche = document.getElementById("prompt").value;
-
-  if (!niche) return alert("Enter something");
-
-  status.innerText = "🔥 Getting ideas...";
-  videos.innerHTML = "";
-
-  const res = await fetch(`${API_URL}/generate-batch?niche=${encodeURIComponent(niche)}`);
-  const data = await res.json();
-
-  const prompts = data.prompts || [];
-
-  for (let i = 0; i < prompts.length; i++) {
-    const p = prompts[i];
-
-    status.innerText = `🎬 Video ${i + 1}/${prompts.length}`;
-
-    const videoRes = await fetch(`${API_URL}/generate?niche=${encodeURIComponent(p)}`); 
-    const blob = await videoRes.blob();
-    const url = URL.createObjectURL(blob);
-
-    const video = document.createElement("video");
-    video.src = url;
-    video.controls = true;
-
-    videos.appendChild(video);
-  }
-
-  status.innerText = "✅ Done!";
-};
-</script>
-
+  <script src="index.js"></script>
 </body>
 </html>
