@@ -5,6 +5,10 @@ import OpenAI from "openai";
 
 dotenv.config();
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -21,14 +25,14 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    // 🎬 Generate reel script
+    // 🔥 Generate reel script using AI
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are a viral short-form video creator. Create a 10-second reel script with scenes, captions, and hooks.",
+            "You are a viral short-form content creator. Create a highly engaging Instagram Reel script with hook, scenes, and captions.",
         },
         {
           role: "user",
@@ -39,11 +43,12 @@ app.post("/generate-video", async (req, res) => {
 
     const script = completion.choices[0].message.content;
 
-    // 🎥 TEMP: return demo video (we replace later)
+    // 🚨 TEMP video (still placeholder)
+    const videoUrl = "https://www.w3schools.com/html/mov_bbb.mp4";
+
     res.json({
       script,
-      videoUrl:
-        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      videoUrl,
     });
   } catch (err) {
     console.error(err);
