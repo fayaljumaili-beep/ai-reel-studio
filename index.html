@@ -100,9 +100,9 @@ button.onclick = async () => {
     button.disabled = true;
 
     // ✅ STEP 1: get batch list
-    const res = await fetch(
-      `${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`
-    );
+    const videoRes = await fetch(
+  `${API_URL}/generate?niche=${encodeURIComponent(p)}`
+);
 
     if (!res.ok) {
       throw new Error("Batch request failed");
@@ -113,24 +113,26 @@ button.onclick = async () => {
     // expected: { prompts: ["...", "...", "..."] }
     const prompts = data.prompts || [];
 
-    // ✅ STEP 2: generate each video
-    for (let i = 0; i < prompts.length; i++) {
-      status.innerText = `🎬 Generating video ${i + 1}/${prompts.length}...`;
+for (let i = 0; i < prompts.length; i++) {
+  const p = prompts[i];
 
-      const videoRes = await fetch(`${API_URL}/generate-batch?niche=${encodeURIComponent(prompt)}`);
+  status.innerText = `🎬 Generating video ${i + 1}/${prompts.length}...`;
 
-      if (!videoRes.ok) continue;
+  const videoRes = await fetch(
+    `${API_URL}/generate?niche=${encodeURIComponent(p)}`
+  );
 
-      const blob = await videoRes.blob();
-      const url = URL.createObjectURL(blob);
+  if (!videoRes.ok) continue;
 
-      const video = document.createElement("video");
-      video.src = url;
-      video.controls = true;
+  const blob = await videoRes.blob();
+  const url = URL.createObjectURL(blob);
 
-      videosContainer.appendChild(video);
-    }
+  const video = document.createElement("video");
+  video.src = url;
+  video.controls = true;
 
+  videosContainer.appendChild(video);
+}
     status.innerText = "✅ Done!";
   } catch (err) {
     console.error(err);
