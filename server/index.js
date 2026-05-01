@@ -2,11 +2,16 @@ import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -18,7 +23,7 @@ const openai = new OpenAI({
 console.log("🔥 Server running...");
 
 
-// ✅ 1. Generate batch prompts
+// ✅ ROUTE 1: generate batch prompts
 app.get("/generate-batch", async (req, res) => {
   try {
     const niche = req.query.niche;
@@ -41,19 +46,14 @@ app.get("/generate-batch", async (req, res) => {
       ],
     });
 
-    const text = completion.choices[0].message.content;
+    let text = completion.choices[0].message.content;
 
-    // Try parsing JSON safely
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      // fallback if model returns plain text
       data = {
-        prompts: text
-          .split("\n")
-          .filter(Boolean)
-          .slice(0, 5),
+        prompts: text.split("\n").filter(Boolean).slice(0, 5),
       };
     }
 
@@ -65,23 +65,15 @@ app.get("/generate-batch", async (req, res) => {
 });
 
 
-// ✅ 2. Generate single video (placeholder for now)
+// ✅ ROUTE 2: return video (IMPORTANT)
 app.get("/generate", async (req, res) => {
   try {
-    const niche = req.query.niche;
+    const filePath = path.join(__dirname, "sample.mp4");
 
-    if (!niche) {
-      return res.status(400).send("Missing niche");
-    }
-
-    console.log("🎬 Generating video for:", niche);
-
-    // ⚠️ TEMP: return sample video (replace with real generation later)
-    return res.sendFile(new URL("./sample.mp4", import.meta.url).pathname);
-
+    res.sendFile(filePath);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Video generation failed");
+    res.status(500).send("Video error");
   }
 });
 
