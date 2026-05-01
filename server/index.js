@@ -1,43 +1,56 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8080;
-
 app.use(cors());
 app.use(express.json());
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("API running ✅");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    console.log("Incoming prompt:", prompt);
-
     if (!prompt) {
-      return res.status(400).json({ error: "No prompt provided" });
+      return res.status(400).json({ error: "Missing prompt" });
     }
 
-    // 🔥 TEMP VIDEO (replace later with AI)
-    const videoUrl =
-      "https://www.w3schools.com/html/mov_bbb.mp4";
+    // 🎬 Generate reel script
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a viral short-form video creator. Create a 10-second reel script with scenes, captions, and hooks.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
 
-    res.json({ videoUrl });
+    const script = completion.choices[0].message.content;
 
+    // 🎥 TEMP: return demo video (we replace later)
+    res.json({
+      script,
+      videoUrl:
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    });
   } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "AI generation failed" });
   }
 });
 
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+app.listen(8080, () => {
+  console.log("🚀 Server running");
 });

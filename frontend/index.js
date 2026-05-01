@@ -11,6 +11,7 @@ window.onload = () => {
     const prompt = document.getElementById("prompt").value;
     const status = document.getElementById("status");
     const video = document.getElementById("video");
+    const scriptBox = document.getElementById("scriptBox");
 
     if (!prompt) {
       status.innerText = "⚠️ Enter a prompt";
@@ -18,7 +19,9 @@ window.onload = () => {
     }
 
     status.innerText = "⏳ Generating...";
+    btn.disabled = true;
     video.src = "";
+    scriptBox.innerText = "";
 
     try {
       const res = await fetch(
@@ -38,13 +41,18 @@ window.onload = () => {
 
       if (data.videoUrl) {
         video.src = data.videoUrl;
-        status.innerText = "✅ Done!";
-      } else {
-        status.innerText = "❌ Failed";
       }
+
+      if (data.script) {
+        scriptBox.innerText = data.script;
+      }
+
+      status.innerText = "✅ Done!";
     } catch (err) {
       console.error(err);
       status.innerText = "❌ Error";
     }
+
+    btn.disabled = false;
   });
 };
