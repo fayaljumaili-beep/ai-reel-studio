@@ -20,7 +20,11 @@
       padding: 20px;
       border-radius: 16px;
       background: #111;
-      box-shadow: 0 0 30px rgba(255, 0, 150, 0.3);
+      box-shadow: 0 0 30px rgba(255, 0, 150, 0.4);
+    }
+
+    h1 {
+      margin-bottom: 20px;
     }
 
     input {
@@ -29,17 +33,26 @@
       border-radius: 8px;
       border: none;
       margin-bottom: 15px;
+      font-size: 16px;
     }
 
     button {
-      padding: 12px 20px;
-      border: none;
+      width: 100%;
+      padding: 14px;
       border-radius: 8px;
+      border: none;
       background: linear-gradient(90deg, #ff00aa, #6a00ff);
       color: white;
-      cursor: pointer;
-      width: 100%;
       font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #status {
+      margin-top: 15px;
     }
 
     video {
@@ -49,14 +62,15 @@
     }
   </style>
 </head>
+
 <body>
 
   <div class="card">
     <h1>AI Reel Studio</h1>
 
-    <input id="prompt" placeholder="Enter your idea..." />
+    <input id="prompt" placeholder="Type your idea..." />
 
-    <button onclick="generate()">Generate</button>
+    <button id="generateBtn">Generate</button>
 
     <p id="status"></p>
 
@@ -64,5 +78,6 @@
   </div>
 
   <script src="index.js"></script>
+
 </body>
 </html>
