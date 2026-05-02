@@ -1,5 +1,5 @@
 import express from "express";
-import fetch from "node-fetch";
+// REMOVE node-fetch entirely (Node 18+ already has fetch)
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
