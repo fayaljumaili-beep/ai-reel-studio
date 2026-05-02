@@ -3,7 +3,6 @@ import cors from "cors";
 import axios from "axios";
 import fs from "fs";
 import { exec } from "child_process";
-import path from "path";
 
 const app = express();
 app.use(cors());
@@ -12,17 +11,15 @@ app.use(express.static("public"));
 
 const PORT = process.env.PORT || 8080;
 
-// ensure public folder exists
-if (!fs.existsSync("public")) {
-  fs.mkdirSync("public");
-}
+// ensure public folder
+if (!fs.existsSync("public")) fs.mkdirSync("public");
 
-// helper: run shell command
+// helper
 function run(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.error("❌ CMD ERROR:", stderr);
+        console.error("❌ FFmpeg error:", stderr);
         reject(stderr);
       } else {
         resolve(stdout);
@@ -31,20 +28,27 @@ function run(cmd) {
   });
 }
 
-// download file
-async function downloadFile(url, output) {
-  const writer = fs.createWriteStream(output);
-  const response = await axios({
-    url,
-    method: "GET",
-    responseType: "stream",
-  });
+// download helper
+async function download(url, path) {
+  const writer = fs.createWriteStream(path);
+  const res = await axios({ url, method: "GET", responseType: "stream" });
 
   return new Promise((resolve, reject) => {
-    response.data.pipe(writer);
+    res.data.pipe(writer);
     writer.on("finish", resolve);
     writer.on("error", reject);
   });
+}
+
+// 🎯 SCRIPT GENERATOR
+function generateScript(prompt) {
+  return [
+    `${prompt} starts with mindset.`,
+    `Consistency beats motivation.`,
+    `Small steps create big wins.`,
+    `Discipline builds success.`,
+    `Keep going no matter what.`
+  ];
 }
 
 app.post("/generate-video", async (req, res) => {
@@ -52,77 +56,89 @@ app.post("/generate-video", async (req, res) => {
     const { prompt } = req.body;
     console.log("🎯 Prompt:", prompt);
 
-    // 1. FETCH VIDEOS FROM PEXELS
-    const response = await axios.get(
-      `https://api.pexels.com/videos/search?query=${prompt}&per_page=5`,
+    // 1. SCRIPT
+    const script = generateScript(prompt);
+    console.log("🧠 Script:", script);
+
+    // 2. FETCH VIDEOS
+    const pexels = await axios.get(
+      `https://api.pexels.com/videos/search?query=${prompt}&per_page=6`,
       {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY,
-        },
+        headers: { Authorization: process.env.PEXELS_API_KEY }
       }
     );
 
-    const videos = response.data.videos;
+    const videos = pexels.data.videos;
+    if (!videos.length) return res.json({ error: "No videos found" });
 
-    if (!videos || videos.length === 0) {
-      return res.json({ error: "No videos found" });
-    }
-
-    console.log("📦 Videos fetched:", videos.length);
-
-    // 2. DOWNLOAD CLIPS
+    // 3. DOWNLOAD CLIPS
     const clips = [];
+    const CLIP_DURATION = 3; // seconds per clip
 
-    for (let i = 0; i < Math.min(5, videos.length); i++) {
-      const videoFile = videos[i].video_files[0].link;
-      const filePath = `public/clip_${i}.mp4`;
+    for (let i = 0; i < Math.min(script.length, videos.length); i++) {
+      const url = videos[i].video_files[0].link;
+      const path = `public/clip_${i}.mp4`;
 
-      console.log("⬇️ Downloading:", videoFile);
+      console.log("⬇️ Downloading:", url);
+      await download(url, path);
 
-      await downloadFile(videoFile, filePath);
-      clips.push(filePath);
+      // trim each clip to fixed duration
+      const trimmed = `public/clip_trim_${i}.mp4`;
+
+      await run(`
+        ffmpeg -y -i ${path} -t ${CLIP_DURATION} \
+        -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
+        -r 30 -c:v libx264 -preset veryfast -crf 23 \
+        -an ${trimmed}
+      `);
+
+      clips.push(`clip_trim_${i}.mp4`);
     }
 
-    console.log("✅ Clips downloaded:", clips);
+    console.log("✅ Trimmed clips:", clips);
 
-    // 3. CREATE CONCAT FILE (FIXED PATH BUG HERE)
-    const concatContent = clips
-      .map((clip) => `file '${clip.replace("public/", "")}'`)
-      .join("\n");
+    // 4. CONCAT FILE
+    const concat = clips.map(c => `file '${c}'`).join("\n");
+    fs.writeFileSync("public/concat.txt", concat);
 
-    fs.writeFileSync("public/concat.txt", concatContent);
+    // 5. MERGE VIDEO
+    await run(`
+      ffmpeg -y -f concat -safe 0 -i public/concat.txt \
+      -c:v libx264 -preset veryfast -crf 23 \
+      public/video.mp4
+    `);
 
-    console.log("📝 Concat file created:");
-    console.log(concatContent);
+    console.log("🎬 Video merged");
 
-    // 4. MERGE WITH FFMPEG
-    const outputVideo = "public/final.mp4";
+    // 6. ADD BACKGROUND MUSIC (OPTIONAL SIMPLE VERSION)
+    const finalOutput = "public/final.mp4";
 
-    const ffmpegCmd = `
-      ffmpeg -y -f concat -safe 0 -i public/concat.txt -c copy ${outputVideo}
-    `;
+    // NOTE: you can replace this with real music later
+    await run(`
+      ffmpeg -y -i public/video.mp4 \
+      -filter:a "volume=0.3" \
+      -c:v copy -c:a aac -shortest ${finalOutput}
+    `);
 
-    console.log("🎬 Running ffmpeg...");
-    await run(ffmpegCmd);
+    console.log("🎵 Audio processed");
 
-    console.log("✅ FINAL VIDEO READY");
-
-    // 5. RETURN VIDEO URL
+    // 7. RESPONSE
     res.json({
       videoUrl: "/final.mp4",
+      script
     });
 
   } catch (err) {
     console.error("🔥 ERROR:", err);
-    res.status(500).json({ error: "Video generation failed" });
+    res.status(500).json({ error: "Generation failed" });
   }
 });
 
-// health check
+// health
 app.get("/", (req, res) => {
   res.send("Server running 🚀");
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on ${PORT}`);
 });
