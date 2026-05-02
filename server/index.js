@@ -5,8 +5,6 @@ import OpenAI from "openai";
 import axios from "axios";
 import fs from "fs";
 import { exec } from "child_process";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
 
 dotenv.config();
 
@@ -17,157 +15,154 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-// ===== OPENAI =====
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ===== GENERATE SCRIPT =====
-async function generateScript(prompt) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You create viral Instagram Reels. Return JSON with title + 4 scenes. Each scene has: text, visual keywords.",
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  });
 
-  const text = completion.choices[0].message.content;
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    // fallback if model returns messy text
-    return {
-      title: prompt,
-      scenes: [
-        { text: text, visual: prompt },
-      ],
-    };
-  }
-}
-
-// ===== FETCH VIDEO FROM PEXELS =====
-async function getVideo(query) {
-  const res = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
-    {
-      headers: {
-        Authorization: process.env.PEXELS_API_KEY,
-      },
-    }
-  );
-
-  return res.data.videos?.[0]?.video_files?.[0]?.link || null;
-}
-
-// ===== DOWNLOAD + STITCH =====
-async function stitchVideos(videoUrls) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const files = [];
-
-      // 1. Download clips
-      for (let i = 0; i < videoUrls.length; i++) {
-        const url = videoUrls[i];
-        const path = `public/clip_${i}.mp4`;
-
-        const response = await axios({
-          url,
-          method: "GET",
-          responseType: "stream",
-        });
-
-        const writer = fs.createWriteStream(path);
-        response.data.pipe(writer);
-
-        await new Promise((res) => writer.on("finish", res));
-
-        files.push(path);
-      }
-
-      // 2. Create concat file (LOW MEMORY METHOD)
-      const concatFile = "public/concat.txt";
-
-      const content = files
-        .map(f => `file '${f.replace('public/', '')}'`)
-        .join("\n");
-
-      fs.writeFileSync(concatFile, content);
-
-      const output = "public/final.mp4";
-
-      // 3. Use SAFE concat (no memory overload)
-      exec(
-  `cd public && ffmpeg -f concat -safe 0 -i concat.txt -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y final.mp4`,
-      (err) => {
-          if (err) {
-            console.error("FFMPEG ERROR:", err);
-            return reject(err);
-          }
-          resolve(output);
-        }
-      );
-
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
-// ===== MAIN ROUTE =====
+// 🎬 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // 1. script
-    const data = await generateScript(prompt);
+    console.log("🎯 Prompt:", prompt);
 
-    const title = data.title;
-    const scenes = data.scenes || [];
+    // 1️⃣ GENERATE SCRIPT
+    const ai = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `Create a short Instagram Reel plan.
+Return JSON ONLY like:
+{
+  "title": "...",
+  "scenes": [
+    {
+      "text": "...",
+      "visual_keywords": ["...", "..."]
+    }
+  ]
+}`
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ]
+    });
 
-    // 2. attach videos
-    for (let scene of scenes) {
-      const videoUrl = await getVideo(scene.visual || prompt);
-      scene.videoUrl = videoUrl;
+    let content = ai.choices[0].message.content;
+
+    // clean markdown if exists
+    content = content.replace(/```json|```/g, "");
+
+    const script = JSON.parse(content);
+
+    console.log("🧠 Script:", script);
+
+    if (!script.scenes || script.scenes.length === 0) {
+      throw new Error("No scenes generated");
     }
 
-    // 3. stitch
-    const videoUrls = scenes
-      .map(s => s.videoUrl)
-      .filter(Boolean);
+    // 2️⃣ FETCH VIDEOS FROM PEXELS
+    const videoUrls = [];
 
-    let finalVideo = null;
+    for (let i = 0; i < script.scenes.length; i++) {
+      const keywords = script.scenes[i].visual_keywords.join(" ");
 
-    if (videoUrls.length > 0) {
-      finalVideo = await stitchVideos(videoUrls);
+      const response = await axios.get(
+        `https://api.pexels.com/videos/search?query=${keywords}&per_page=1`,
+        {
+          headers: {
+            Authorization: process.env.PEXELS_API_KEY,
+          },
+        }
+      );
+
+      const video = response.data.videos?.[0];
+
+      if (video) {
+        const url = video.video_files[0].link;
+        videoUrls.push(url);
+      }
     }
 
-    // 4. response
+    console.log("🎥 Video URLs:", videoUrls);
+
+    if (videoUrls.length === 0) {
+      throw new Error("No videos found");
+    }
+
+    // 3️⃣ DOWNLOAD CLIPS
+    const files = [];
+
+    for (let i = 0; i < videoUrls.length; i++) {
+      const path = `public/clip_${i}.mp4`;
+
+      const response = await axios({
+        url: videoUrls[i],
+        method: "GET",
+        responseType: "stream",
+      });
+
+      const writer = fs.createWriteStream(path);
+      response.data.pipe(writer);
+
+      await new Promise((res) => writer.on("finish", res));
+
+      files.push(path);
+    }
+
+    console.log("📁 Files downloaded:", files);
+
+    // 4️⃣ CREATE CONCAT FILE (FIXED PATH)
+    const concatFile = "public/concat.txt";
+
+    const contentTxt = files
+      .map(f => `file '${f.replace("public/", "")}'`)
+      .join("\n");
+
+    fs.writeFileSync(concatFile, contentTxt);
+
+    console.log("📝 Concat file created");
+
+    // 5️⃣ STITCH VIDEO (LOW MEMORY SAFE)
+    const output = "public/final.mp4";
+
+    await new Promise((resolve, reject) => {
+      exec(
+        `cd public && ffmpeg -f concat -safe 0 -i concat.txt -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y final.mp4`,
+        (err, stdout, stderr) => {
+          if (err) {
+            console.error("❌ FFMPEG ERROR:", stderr);
+            return reject(err);
+          }
+          console.log("✅ FFMPEG SUCCESS");
+          resolve();
+        }
+      );
+    });
+
+    console.log("🎬 FINAL VIDEO READY");
+
+    // 6️⃣ RETURN RESULT
     res.json({
-      title,
-      scenes,
-      finalVideoUrl: finalVideo
-        ? `/${finalVideo.replace("public/", "")}`
-        : null,
+      script,
+      videoUrl: "/final.mp4",
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("🚨 SERVER ERROR:", err);
+
+    res.status(500).json({
+      error: err.message,
+    });
   }
 });
 
-// ===== START =====
+
+// 🚀 START SERVER
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log(`Server running on port ${PORT}`);
 });
