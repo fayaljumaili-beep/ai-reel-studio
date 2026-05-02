@@ -4,7 +4,9 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import axios from "axios";
 import fs from "fs";
-import { exec } from "child_process";
+import path from "path";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 
 dotenv.config();
 
@@ -15,154 +17,137 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+// ===== OPENAI =====
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+apiKey: process.env.OPENAI_API_KEY,
 });
 
+// ===== PEXELS =====
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
-// 🎬 MAIN ENDPOINT
+// ===== ROUTE =====
 app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
+try {
+const { prompt } = req.body;
 
-    console.log("🎯 Prompt:", prompt);
+```
+console.log("🎯 Prompt:", prompt);
 
-    // 1️⃣ GENERATE SCRIPT
-    const ai = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `Create a short Instagram Reel plan.
-Return JSON ONLY like:
-{
-  "title": "...",
-  "scenes": [
+// ===== 1. GENERATE SCRIPT =====
+const completion = await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages: [
     {
-      "text": "...",
-      "visual_keywords": ["...", "..."]
-    }
-  ]
-}`
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
-    });
-
-    let content = ai.choices[0].message.content;
-
-    // clean markdown if exists
-    content = content.replace(/```json|```/g, "");
-
-    const script = JSON.parse(content);
-
-    console.log("🧠 Script:", script);
-
-    if (!script.scenes || script.scenes.length === 0) {
-      throw new Error("No scenes generated");
-    }
-
-    // 2️⃣ FETCH VIDEOS FROM PEXELS
-    const videoUrls = [];
-
-    for (let i = 0; i < script.scenes.length; i++) {
-      const keywords = script.scenes[i].visual_keywords.join(" ");
-
-      const response = await axios.get(
-        `https://api.pexels.com/videos/search?query=${keywords}&per_page=1`,
-        {
-          headers: {
-            Authorization: process.env.PEXELS_API_KEY,
-          },
-        }
-      );
-
-      const video = response.data.videos?.[0];
-
-      if (video) {
-        const url = video.video_files[0].link;
-        videoUrls.push(url);
-      }
-    }
-
-    console.log("🎥 Video URLs:", videoUrls);
-
-    if (videoUrls.length === 0) {
-      throw new Error("No videos found");
-    }
-
-    // 3️⃣ DOWNLOAD CLIPS
-    const files = [];
-
-    for (let i = 0; i < videoUrls.length; i++) {
-      const path = `public/clip_${i}.mp4`;
-
-      const response = await axios({
-        url: videoUrls[i],
-        method: "GET",
-        responseType: "stream",
-      });
-
-      const writer = fs.createWriteStream(path);
-      response.data.pipe(writer);
-
-      await new Promise((res) => writer.on("finish", res));
-
-      files.push(path);
-    }
-
-    console.log("📁 Files downloaded:", files);
-
-    // 4️⃣ CREATE CONCAT FILE (FIXED PATH)
-    const concatFile = "public/concat.txt";
-
-    const contentTxt = files
-      .map(f => `file '${f.replace("public/", "")}'`)
-      .join("\n");
-
-    fs.writeFileSync(concatFile, contentTxt);
-
-    console.log("📝 Concat file created");
-
-    // 5️⃣ STITCH VIDEO (LOW MEMORY SAFE)
-    const output = "public/final.mp4";
-
-    await new Promise((resolve, reject) => {
-      exec(
-        `cd public && ffmpeg -f concat -safe 0 -i concat.txt -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y final.mp4`,
-        (err, stdout, stderr) => {
-          if (err) {
-            console.error("❌ FFMPEG ERROR:", stderr);
-            return reject(err);
-          }
-          console.log("✅ FFMPEG SUCCESS");
-          resolve();
-        }
-      );
-    });
-
-    console.log("🎬 FINAL VIDEO READY");
-
-    // 6️⃣ RETURN RESULT
-    res.json({
-      script,
-      videoUrl: "/final.mp4",
-    });
-
-  } catch (err) {
-    console.error("🚨 SERVER ERROR:", err);
-
-    res.status(500).json({
-      error: err.message,
-    });
-  }
+      role: "system",
+      content:
+        "Return JSON with title and 3 scenes. Each scene must have text and visual_keywords array.",
+    },
+    {
+      role: "user",
+      content: prompt,
+    },
+  ],
 });
 
+const script = JSON.parse(completion.choices[0].message.content);
 
-// 🚀 START SERVER
+console.log("🧠 Script:", script);
+
+// ===== 2. FETCH VIDEOS =====
+const clips = [];
+
+const scenes = script.scenes.slice(0, 2); // 🔥 LIMIT TO 2 CLIPS
+
+for (let i = 0; i < scenes.length; i++) {
+  const query = scenes[i].visual_keywords.join(" ");
+
+  const response = await axios.get(
+    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
+    {
+      headers: {
+        Authorization: PEXELS_API_KEY,
+      },
+    }
+  );
+
+  const videoUrl =
+    response.data.videos[0].video_files[0].link;
+
+  console.log("📹 Video URL:", videoUrl);
+
+  const filePath = `public/clip_${i}.mp4`;
+
+  const writer = fs.createWriteStream(filePath);
+
+  const videoStream = await axios({
+    url: videoUrl,
+    method: "GET",
+    responseType: "stream",
+  });
+
+  videoStream.data.pipe(writer);
+
+  await new Promise((resolve) => writer.on("finish", resolve));
+
+  clips.push(filePath);
+}
+
+console.log("📁 Clips ready:", clips);
+
+// ===== 3. CREATE CONCAT FILE =====
+const concatFile = "public/concat.txt";
+
+const concatContent = clips
+  .map((clip) => `file '${path.resolve(clip)}'`)
+  .join("\n");
+
+fs.writeFileSync(concatFile, concatContent);
+
+console.log("🧾 Concat file created");
+
+// ===== 4. FFMPEG STITCH =====
+const output = "public/final.mp4";
+
+await new Promise((resolve, reject) => {
+  ffmpeg()
+    .input(concatFile)
+    .inputOptions(["-f concat", "-safe 0"])
+    .outputOptions([
+      "-vf scale=480:854", // 🔥 LOW RES (important)
+      "-c:v libx264",
+      "-preset ultrafast",
+      "-crf 32",
+      "-pix_fmt yuv420p",
+    ])
+    .output(output)
+    .on("start", (cmd) => console.log("🎬 FFmpeg:", cmd))
+    .on("end", () => {
+      console.log("✅ FINAL VIDEO READY");
+      resolve();
+    })
+    .on("error", (err) => {
+      console.error("❌ FFMPEG ERROR:", err);
+      reject(err);
+    })
+    .run();
+});
+
+// ===== RESPONSE =====
+res.json({
+  script,
+  videoUrl: "/final.mp4",
+});
+```
+
+} catch (err) {
+console.error("🔥 SERVER ERROR:", err);
+res.status(500).json({ error: "Server error" });
+}
+});
+
+// ===== START SERVER =====
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+console.log(`🚀 Server running on port ${PORT}`);
 });
