@@ -21,7 +21,7 @@
       background: #111;
       padding: 20px;
       border-radius: 20px;
-      width: 300px;
+      width: 320px;
       text-align: center;
       box-shadow: 0 0 30px rgba(255, 0, 200, 0.2);
     }
@@ -57,12 +57,14 @@
       font-size: 14px;
     }
 
+    /* 🎬 SCRIPT STYLE (paragraph, not bullets) */
     #scriptBox {
-      margin-top: 12px;
+      margin-top: 14px;
       text-align: left;
-      font-size: 13px;
-      line-height: 1.5;
-      opacity: 0.9;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-line; /* keeps paragraph formatting */
+      opacity: 0.95;
     }
   </style>
 </head>
@@ -78,6 +80,7 @@
 
     <video id="video" controls></video>
 
+    <!-- 🧠 SCRIPT OUTPUT -->
     <div id="scriptBox"></div>
   </div>
 
@@ -91,7 +94,7 @@
       try {
         status.innerText = "⏳ Generating...";
         video.src = "";
-        scriptBox.innerHTML = "";
+        scriptBox.innerText = "";
 
         const res = await fetch(
           "https://ai-reel-studio-production.up.railway.app/generate-video",
@@ -112,22 +115,19 @@
         if (data.videoUrl) {
           status.innerText = "✅ Done!";
 
-          // IMPORTANT: correct URL (no double https)
           video.src =
             "https://ai-reel-studio-production.up.railway.app" +
             data.videoUrl;
 
           video.load();
           video.play();
-
         } else {
           status.innerText = "❌ Failed";
         }
 
-        // 🎯 SCRIPT DISPLAY
+        // 🧠 SHOW FULL SCRIPT (NOT BULLETS)
         if (data.script) {
-          scriptBox.innerHTML =
-            data.script.map(line => `• ${line}`).join("<br>");
+          scriptBox.innerText = data.script;
         }
 
       } catch (err) {

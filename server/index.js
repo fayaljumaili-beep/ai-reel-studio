@@ -42,13 +42,23 @@ async function download(url, path) {
 
 // 🎯 SCRIPT GENERATOR
 function generateScript(prompt) {
-  return [
-    `${prompt} starts with mindset.`,
-    `Consistency beats motivation.`,
-    `Small steps create big wins.`,
-    `Discipline builds success.`,
-    `Keep going no matter what.`
-  ];
+  return `
+${prompt} doesn't happen overnight.
+
+It starts with the mindset you choose every single day.
+
+Consistency will always beat motivation, because motivation fades, but discipline stays.
+
+The small steps you take today might not feel like much, but over time, they create massive results.
+
+There will be days when it's hard. Days when you feel like giving up.
+
+But those are the moments that define you.
+
+Keep showing up. Keep pushing forward.
+
+Because your future is being built right now.
+  `.trim();
 }
 
 app.post("/generate-video", async (req, res) => {
