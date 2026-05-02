@@ -59,40 +59,48 @@
   </div>
 
   <script>
-    async function generate() {
-      const prompt = document.getElementById("prompt").value;
-      const status = document.getElementById("status");
-      const video = document.getElementById("video");
+async function generate() {
+  const status = document.getElementById("status");
+  const video = document.getElementById("video");
 
-      status.innerText = "⏳ Generating...";
-      video.src = "";
+  status.innerText = "⏳ Generating...";
+  video.style.display = "none";
 
-      try {
-        const res = await fetch(
-          "https://YOUR-RAILWAY-URL.up.railway.app/generate-video",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ prompt }),
-          }
-        );
-
-        const data = await res.json();
-
-        if (data.videoUrl) {
-          status.innerText = "✅ Done!";
-          video.src =
-            "https://https://ai-reel-studio-production.up.railway.app/" + data.videoUrl;
-        } else {
-          status.innerText = "❌ Error";
-        }
-      } catch (err) {
-        console.error(err);
-        status.innerText = "❌ Failed";
+  try {
+    const res = await fetch(
+      "https://ai-reel-studio-production.up.railway.app/generate-video",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: document.getElementById("prompt").value,
+        }),
       }
+    );
+
+    console.log("STATUS:", res.status);
+
+    const data = await res.json();
+    console.log("DATA:", data);
+
+    if (data.videoUrl) {
+      status.innerText = "✅ Done!";
+      video.src =
+        "https://ai-reel-studio-production.up.railway.app" +
+        data.videoUrl;
+      video.style.display = "block";
+      video.load();
+      video.play();
+    } else {
+      status.innerText = "❌ Error";
     }
-  </script>
+  } catch (err) {
+    console.error(err);
+    status.innerText = "❌ Failed";
+  }
+}
+</script>
 </body>
 </html>
