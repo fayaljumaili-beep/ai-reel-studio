@@ -100,9 +100,13 @@ async function generateVoice(script) {
 ========================= */
 function buildCaptions(lines) {
   let time = 0;
-  const duration = 2.5;
 
   return lines.map(line => {
+    const words = line.split(" ").length;
+
+    // smarter timing based on speech
+    const duration = Math.max(2, words * 0.4);
+
     const start = time;
     const end = time + duration;
     time += duration;
@@ -110,6 +114,7 @@ function buildCaptions(lines) {
     const clean = line
       .replace(/'/g, "")
       .replace(/:/g, "")
+      .replace(/,/g, "")
       .trim();
 
     return `drawtext=text='${clean}':
@@ -134,7 +139,10 @@ app.post("/generate-video", async (req, res) => {
     const script = await generateScript(prompt);
 
     // 2. Split into caption lines
-    const lines = script.split(". ");
+    const lines = script
+  .split("\n")
+  .map(l => l.trim())
+  .filter(l => l.length > 0);
 
     // 3. Get clips
     const clips = await getClips(prompt);
@@ -175,7 +183,7 @@ app.post("/generate-video", async (req, res) => {
       ffmpeg -y \
       -i public/final.mp4 \
       -i ${voicePath} \
-      -vf "${captions}" \
+      -vf "${captions.replace(/\n/g, "")}"
       -c:v libx264 -preset fast -crf 23 \
       -c:a aac \
       -shortest \
