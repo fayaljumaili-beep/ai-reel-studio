@@ -76,6 +76,7 @@ async function stitchVideos(videoUrls) {
     try {
       const files = [];
 
+      // 1. Download clips
       for (let i = 0; i < videoUrls.length; i++) {
         const url = videoUrls[i];
         const path = `public/clip_${i}.mp4`;
@@ -94,13 +95,20 @@ async function stitchVideos(videoUrls) {
         files.push(path);
       }
 
+      // 2. Create concat file (LOW MEMORY METHOD)
+      const concatFile = "public/concat.txt";
+
+      const content = files
+        .map(f => `file '${f}'`)
+        .join("\n");
+
+      fs.writeFileSync(concatFile, content);
+
       const output = "public/final.mp4";
 
-      // 🔥 IMPORTANT: re-encode instead of copy
-      const inputs = files.map(f => `-i ${f}`).join(" ");
-
+      // 3. Use SAFE concat (no memory overload)
       exec(
-        `ffmpeg ${inputs} -filter_complex "concat=n=${files.length}:v=1:a=0" -y ${output}`,
+        `ffmpeg -f concat -safe 0 -i ${concatFile} -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y ${output}`,
         (err) => {
           if (err) {
             console.error("FFMPEG ERROR:", err);
