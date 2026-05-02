@@ -1,106 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>AI Reel Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body {
-      background: black;
-      color: white;
-      font-family: Arial;
+      background: #000;
+      font-family: Arial, sans-serif;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
+      margin: 0;
+      color: white;
     }
 
-    .box {
-      padding: 30px;
-      border-radius: 20px;
+    .card {
       background: #111;
-      text-align: center;
+      padding: 20px;
+      border-radius: 20px;
       width: 300px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(255, 0, 200, 0.2);
     }
 
     input {
       width: 100%;
       padding: 10px;
-      margin-bottom: 10px;
       border-radius: 10px;
       border: none;
+      margin-bottom: 10px;
+      font-size: 14px;
     }
 
     button {
       width: 100%;
       padding: 12px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: none;
-      background: linear-gradient(to right, pink, purple);
+      background: linear-gradient(90deg, #ff7cf0, #a100ff);
       color: white;
-      font-weight: bold;
+      font-size: 16px;
       cursor: pointer;
     }
 
     video {
       width: 100%;
       margin-top: 15px;
+      border-radius: 10px;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    #scriptBox {
+      margin-top: 12px;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.5;
+      opacity: 0.9;
     }
   </style>
 </head>
 
 <body>
-  <div class="box">
+  <div class="card">
     <h2>AI Reel Studio</h2>
 
-    <input id="prompt" placeholder="Enter idea..." />
+    <input id="prompt" placeholder="Enter prompt..." />
     <button onclick="generate()">Generate</button>
 
-    <p id="status"></p>
+    <div id="status"></div>
+
     <video id="video" controls></video>
+
+    <div id="scriptBox"></div>
   </div>
 
   <script>
-async function generate() {
-  const status = document.getElementById("status");
-  const video = document.getElementById("video");
+    async function generate() {
+      const prompt = document.getElementById("prompt").value;
+      const status = document.getElementById("status");
+      const video = document.getElementById("video");
+      const scriptBox = document.getElementById("scriptBox");
 
-  status.innerText = "⏳ Generating...";
-  video.style.display = "none";
+      try {
+        status.innerText = "⏳ Generating...";
+        video.src = "";
+        scriptBox.innerHTML = "";
 
-  try {
-    const res = await fetch(
-      "https://ai-reel-studio-production.up.railway.app/generate-video",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: document.getElementById("prompt").value,
-        }),
+        const res = await fetch(
+          "https://ai-reel-studio-production.up.railway.app/generate-video",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ prompt })
+          }
+        );
+
+        console.log("STATUS:", res.status);
+
+        const data = await res.json();
+        console.log("DATA:", data);
+
+        if (data.videoUrl) {
+          status.innerText = "✅ Done!";
+
+          // IMPORTANT: correct URL (no double https)
+          video.src =
+            "https://ai-reel-studio-production.up.railway.app" +
+            data.videoUrl;
+
+          video.load();
+          video.play();
+
+        } else {
+          status.innerText = "❌ Failed";
+        }
+
+        // 🎯 SCRIPT DISPLAY
+        if (data.script) {
+          scriptBox.innerHTML =
+            data.script.map(line => `• ${line}`).join("<br>");
+        }
+
+      } catch (err) {
+        console.error(err);
+        status.innerText = "❌ Error";
       }
-    );
-
-    console.log("STATUS:", res.status);
-
-    const data = await res.json();
-    console.log("DATA:", data);
-
-    if (data.videoUrl) {
-      status.innerText = "✅ Done!";
-      video.src =
-        "https://ai-reel-studio-production.up.railway.app" +
-        data.videoUrl;
-      video.style.display = "block";
-      video.load();
-      video.play();
-    } else {
-      status.innerText = "❌ Error";
     }
-  } catch (err) {
-    console.error(err);
-    status.innerText = "❌ Failed";
-  }
-}
-</script>
+  </script>
 </body>
 </html>
