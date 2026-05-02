@@ -79,48 +79,81 @@ app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
-    }
-
-    console.log("🔥 Prompt:", prompt);
-
-    // ===== 🧠 1. Generate script =====
+    // 1. Generate structured script
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content:
-            "You are a viral Instagram Reel creator. Generate a highly engaging reel script with hook, scenes, captions, and voiceover.",
+          content: `
+Create a short viral reel script in JSON.
+
+Return format:
+{
+  "title": "...",
+  "scenes": [
+    {
+      "text": "...",
+      "visual": "keyword for stock footage"
+    }
+  ]
+}
+          `
         },
         {
           role: "user",
-          content: prompt,
-        },
+          content: prompt
+        }
       ],
+      temperature: 0.8
     });
 
-    const script = completion.choices[0].message.content;
+    const raw = completion.choices[0].message.content;
 
-    // ===== 🎧 2. Generate voice =====
-    const voiceUrl = await generateVoice(script);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.json({ error: "AI JSON parse failed", raw });
+    }
 
-    // ===== 🎥 3. Get visual =====
-    const visualUrl = await getVisuals(prompt);
+    // 2. Fetch videos per scene
+    const videos = [];
 
-    console.log("🎬 Visual:", visualUrl);
+    for (const scene of parsed.scenes) {
+      const query = scene.visual;
 
-    // ===== ✅ RESPONSE =====
+      const response = await axios.get(
+        `https://api.pexels.com/videos/search`,
+        {
+          headers: {
+            Authorization: process.env.PEXELS_API_KEY
+          },
+          params: {
+            query,
+            per_page: 1
+          }
+        }
+      );
+
+      const videoUrl =
+        response.data.videos?.[0]?.video_files?.[0]?.link || null;
+
+      videos.push({
+        text: scene.text,
+        visual: query,
+        video: videoUrl
+      });
+    }
+
     res.json({
-      script,
-      videoUrl:
-        visualUrl || "https://www.w3schools.com/html/mov_bbb.mp4",
-      voiceUrl,
+      title: parsed.title,
+      scenes: videos
     });
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).json({ error: "Generation failed" });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
