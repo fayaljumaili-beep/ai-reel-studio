@@ -64,7 +64,7 @@ for (let i = 0; i < scenes.length; i++) {
   const query = scenes[i].visual_keywords.join(" ");
 
   const response = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
+  `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
     {
       headers: {
         Authorization: PEXELS_API_KEY,
