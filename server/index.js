@@ -94,19 +94,22 @@ async function stitchVideos(videoUrls) {
         files.push(path);
       }
 
-      const concatFile = "public/concat.txt";
-      const content = files.map(f => `file '${f}'`).join("\n");
-      fs.writeFileSync(concatFile, content);
-
       const output = "public/final.mp4";
 
+      // 🔥 IMPORTANT: re-encode instead of copy
+      const inputs = files.map(f => `-i ${f}`).join(" ");
+
       exec(
-        `ffmpeg -f concat -safe 0 -i ${concatFile} -c copy ${output}`,
+        `ffmpeg ${inputs} -filter_complex "concat=n=${files.length}:v=1:a=0" -y ${output}`,
         (err) => {
-          if (err) return reject(err);
+          if (err) {
+            console.error("FFMPEG ERROR:", err);
+            return reject(err);
+          }
           resolve(output);
         }
       );
+
     } catch (err) {
       reject(err);
     }
