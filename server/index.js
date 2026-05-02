@@ -99,7 +99,7 @@ async function stitchVideos(videoUrls) {
       const concatFile = "public/concat.txt";
 
       const content = files
-        .map(f => `file '${f}'`)
+        .map(f => `file '${f.replace('public/', '')}'`)
         .join("\n");
 
       fs.writeFileSync(concatFile, content);
@@ -108,8 +108,8 @@ async function stitchVideos(videoUrls) {
 
       // 3. Use SAFE concat (no memory overload)
       exec(
-        `ffmpeg -f concat -safe 0 -i ${concatFile} -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y ${output}`,
-        (err) => {
+  `cd public && ffmpeg -f concat -safe 0 -i concat.txt -vf "scale=720:1280" -c:v libx264 -preset veryfast -crf 28 -y final.mp4`,
+      (err) => {
           if (err) {
             console.error("FFMPEG ERROR:", err);
             return reject(err);
