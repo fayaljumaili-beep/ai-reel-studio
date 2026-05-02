@@ -1,35 +1,74 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "ffmpeg-static";
-
-dotenv.config();
+import cors from "cors";
+import { exec } from "child_process";
 
 const app = express();
-const PORT = process.env.PORT || 8080;
-
-app.use(cors());
 app.use(express.json());
+app.use(cors());
+
+// serve video files
 app.use(express.static("public"));
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+const PORT = process.env.PORT || 8080;
 
-// ensure public folder exists
-if (!fs.existsSync("public")) {
-  fs.mkdirSync("public");
+/* =========================
+   🎙️ VOICE GENERATION
+========================= */
+async function generateVoice(script) {
+  if (!process.env.ELEVENLABS_API_KEY) {
+    console.log("⚠️ No ElevenLabs key, skipping voice...");
+    return;
+  }
+
+  console.log("🎙️ Generating voice...");
+
+  const response = await axios({
+    method: "POST",
+    url: "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+    headers: {
+      "xi-api-key": process.env.ELEVENLABS_API_KEY,
+      "Content-Type": "application/json",
+    },
+    data: {
+      text: script,
+      model_id: "eleven_monolingual_v1",
+    },
+    responseType: "arraybuffer",
+  });
+
+  fs.writeFileSync("public/voice.mp3", response.data);
 }
 
-// ===== FETCH VIDEOS FROM PEXELS =====
-async function fetchVideos(query) {
+/* =========================
+   🎬 MAIN ROUTE
+========================= */
+app.post("/generate-video", async (req, res) => {
   try {
-    console.log("🔍 Fetching videos for:", query);
+    const { prompt } = req.body;
 
-    const response = await axios.get(
-      `https://api.pexels.com/videos/search?query=${query}&per_page=5`,
+    console.log("📩 Prompt:", prompt);
+
+    if (!prompt) {
+      return res.status(400).json({ error: "No prompt provided" });
+    }
+
+    /* =========================
+       🧠 SIMPLE SCRIPT (MVP)
+    ========================= */
+    const script = `A cinematic reel about ${prompt}. Success, luxury, lifestyle, motivation, and ambition.`;
+
+    /* =========================
+       🎥 FETCH VIDEOS (PEXELS)
+    ========================= */
+    console.log("🔎 Fetching videos...");
+
+    const pexels = await axios.get(
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
+        prompt
+      )}&per_page=5`,
       {
         headers: {
           Authorization: process.env.PEXELS_API_KEY,
@@ -37,97 +76,115 @@ async function fetchVideos(query) {
       }
     );
 
-    const videos = response.data.videos;
+    const videos = pexels.data.videos;
 
     if (!videos || videos.length === 0) {
-      throw new Error("No videos found");
+      return res.json({ error: "No videos found" });
     }
 
-    return videos.map((v) => v.video_files[0].link);
-  } catch (err) {
-    console.error("❌ Pexels error:", err.message);
-    throw err;
-  }
-}
+    /* =========================
+       ⬇️ DOWNLOAD CLIPS
+    ========================= */
+    console.log("⬇️ Downloading clips...");
 
-// ===== DOWNLOAD FILE =====
-async function downloadFile(url, filename) {
-  const writer = fs.createWriteStream(filename);
-  const response = await axios({
-    url,
-    method: "GET",
-    responseType: "stream",
-  });
+    const clips = [];
 
-  return new Promise((resolve, reject) => {
-    response.data.pipe(writer);
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-  });
-}
-
-// ===== MAIN ROUTE =====
-app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    console.log("🚀 Generate request:", prompt);
-
-    // 1. fetch videos
-    const videoUrls = await fetchVideos(prompt);
-
-    // 2. download clips
-    const clipPaths = [];
-
-    for (let i = 0; i < videoUrls.length; i++) {
+    for (let i = 0; i < Math.min(videos.length, 5); i++) {
+      const url = videos[i].video_files[0].link;
       const filePath = `public/clip_${i}.mp4`;
-      console.log("⬇️ Downloading:", videoUrls[i]);
 
-      await downloadFile(videoUrls[i], filePath);
-      clipPaths.push(filePath);
+      const response = await axios({
+        method: "GET",
+        url,
+        responseType: "stream",
+      });
+
+      await new Promise((resolve) => {
+        const stream = fs.createWriteStream(filePath);
+        response.data.pipe(stream);
+        stream.on("finish", resolve);
+      });
+
+      clips.push(filePath);
     }
 
-    console.log("✅ Files downloaded:", clipPaths);
+    /* =========================
+       📄 CREATE CONCAT FILE
+    ========================= */
+    const concatFile = clips.map((c) => `file '${c}'`).join("\n");
+    fs.writeFileSync("public/concat.txt", concatFile);
 
-    // 3. create concat file
-    const concatPath = "public/concat.txt";
-    const concatContent = clipPaths
-      .map((p) => `file '${path.resolve(p)}'`)
-      .join("\n");
-
-    fs.writeFileSync(concatPath, concatContent);
-
-    console.log("🧩 Concat file created");
-
-    // 4. run ffmpeg
-    const outputPath = "public/final.mp4";
+    /* =========================
+       🎬 MERGE CLIPS
+    ========================= */
+    console.log("🎬 Merging clips...");
 
     await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(concatPath)
-        .inputOptions(["-f concat", "-safe 0"])
-        .outputOptions([
-          "-vf scale=720:1280",
-          "-c:v libx264",
-          "-preset veryfast",
-          "-crf 28",
-        ])
-        .on("end", resolve)
-        .on("error", reject)
-        .save(outputPath);
+      exec(
+        `ffmpeg -y -f concat -safe 0 -i public/concat.txt -c copy public/final.mp4`,
+        (err) => {
+          if (err) return reject(err);
+          resolve();
+        }
+      );
     });
 
-    console.log("🎬 FINAL VIDEO READY");
+    /* =========================
+       🎙️ VOICE
+    ========================= */
+    await generateVoice(script);
 
+    /* =========================
+       🎬 FINAL VIDEO (VOICE + CAPTIONS + VERTICAL)
+    ========================= */
+    console.log("🎬 Creating final video...");
+
+    const hasVoice = fs.existsSync("public/voice.mp3");
+
+    const ffmpegCommand = hasVoice
+      ? `
+      ffmpeg -y \
+      -i public/final.mp4 \
+      -i public/voice.mp3 \
+      -vf "scale=1080:1920,drawtext=text='${script
+        .replace(/:/g, "\\:")
+        .slice(0, 80)}...':x=50:y=H-100:fontsize=36:fontcolor=white" \
+      -c:v libx264 \
+      -c:a aac \
+      -shortest \
+      public/output.mp4
+    `
+      : `
+      ffmpeg -y \
+      -i public/final.mp4 \
+      -vf "scale=1080:1920" \
+      public/output.mp4
+    `;
+
+    await new Promise((resolve, reject) => {
+      exec(ffmpegCommand, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    console.log("✅ FINAL VIDEO READY");
+
+    /* =========================
+       🎉 RESPONSE
+    ========================= */
     res.json({
-      videoUrl: `/final.mp4`,
+      videoUrl: "/output.mp4",
     });
   } catch (err) {
-    console.error("🔥 SERVER ERROR:", err);
+    console.error("❌ ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
+/* =========================
+   🚀 START SERVER
+========================= */
 app.listen(PORT, () => {
-  console.log("✅ Server running on port", PORT);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
