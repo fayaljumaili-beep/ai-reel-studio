@@ -4,151 +4,150 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import axios from "axios";
 import fs from "fs";
-import path from "path";
+import { exec } from "child_process";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// middleware
 app.use(cors());
 app.use(express.json());
-
-// serve static files (for voice)
 app.use(express.static("public"));
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 // ===== OPENAI =====
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ===== 🎙️ GENERATE VOICE =====
-async function generateVoice(text) {
-  const response = await axios.post(
-    "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
-    {
-      text,
-      model_id: "eleven_monolingual_v1",
-    },
+// ===== GENERATE SCRIPT =====
+async function generateScript(prompt) {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You create viral Instagram Reels. Return JSON with title + 4 scenes. Each scene has: text, visual keywords.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+  });
+
+  const text = completion.choices[0].message.content;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // fallback if model returns messy text
+    return {
+      title: prompt,
+      scenes: [
+        { text: text, visual: prompt },
+      ],
+    };
+  }
+}
+
+// ===== FETCH VIDEO FROM PEXELS =====
+async function getVideo(query) {
+  const res = await axios.get(
+    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
     {
       headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
+        Authorization: process.env.PEXELS_API_KEY,
       },
-      responseType: "arraybuffer",
     }
   );
 
-  // ensure public folder exists
-  if (!fs.existsSync("public")) {
-    fs.mkdirSync("public");
-  }
-
-  const filePath = path.join("public", "voice.mp3");
-  fs.writeFileSync(filePath, response.data);
-
-  return "/voice.mp3";
+  return res.data.videos?.[0]?.video_files?.[0]?.link || null;
 }
 
-// ===== 🎥 GET VISUALS (PEXELS) =====
-async function getVisuals(query) {
-  try {
-    const res = await axios.get(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
-        query
-      )}&per_page=1`,
-      {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY,
-        },
+// ===== DOWNLOAD + STITCH =====
+async function stitchVideos(videoUrls) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const files = [];
+
+      for (let i = 0; i < videoUrls.length; i++) {
+        const url = videoUrls[i];
+        const path = `public/clip_${i}.mp4`;
+
+        const response = await axios({
+          url,
+          method: "GET",
+          responseType: "stream",
+        });
+
+        const writer = fs.createWriteStream(path);
+        response.data.pipe(writer);
+
+        await new Promise((res) => writer.on("finish", res));
+
+        files.push(path);
       }
-    );
 
-    const video = res.data.videos[0];
+      const concatFile = "public/concat.txt";
+      const content = files.map(f => `file '${f}'`).join("\n");
+      fs.writeFileSync(concatFile, content);
 
-    return video?.video_files[0]?.link || null;
-  } catch (err) {
-    console.error("Pexels error:", err.message);
-    return null;
-  }
+      const output = "public/final.mp4";
+
+      exec(
+        `ffmpeg -f concat -safe 0 -i ${concatFile} -c copy ${output}`,
+        (err) => {
+          if (err) return reject(err);
+          resolve(output);
+        }
+      );
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
-// ===== 🚀 MAIN ROUTE =====
+// ===== MAIN ROUTE =====
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // 1. Generate structured script
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `
-Create a short viral reel script in JSON.
+    // 1. script
+    const data = await generateScript(prompt);
 
-Return format:
-{
-  "title": "...",
-  "scenes": [
-    {
-      "text": "...",
-      "visual": "keyword for stock footage"
-    }
-  ]
-}
-          `
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.8
-    });
+    const title = data.title;
+    const scenes = data.scenes || [];
 
-    const raw = completion.choices[0].message.content;
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return res.json({ error: "AI JSON parse failed", raw });
+    // 2. attach videos
+    for (let scene of scenes) {
+      const videoUrl = await getVideo(scene.visual || prompt);
+      scene.videoUrl = videoUrl;
     }
 
-    // 2. Fetch videos per scene
-    const videos = [];
+    // 3. stitch
+    const videoUrls = scenes
+      .map(s => s.videoUrl)
+      .filter(Boolean);
 
-    for (const scene of parsed.scenes) {
-      const query = scene.visual;
+    let finalVideo = null;
 
-      const response = await axios.get(
-        `https://api.pexels.com/videos/search`,
-        {
-          headers: {
-            Authorization: process.env.PEXELS_API_KEY
-          },
-          params: {
-            query,
-            per_page: 1
-          }
-        }
-      );
-
-      const videoUrl =
-        response.data.videos?.[0]?.video_files?.[0]?.link || null;
-
-      videos.push({
-        text: scene.text,
-        visual: query,
-        video: videoUrl
-      });
+    if (videoUrls.length > 0) {
+      finalVideo = await stitchVideos(videoUrls);
     }
 
+    // 4. response
     res.json({
-      title: parsed.title,
-      scenes: videos
+      title,
+      scenes,
+      finalVideoUrl: finalVideo
+        ? `/${finalVideo.replace("public/", "")}`
+        : null,
     });
 
   } catch (err) {
@@ -157,7 +156,7 @@ Return format:
   }
 });
 
-// ===== START SERVER =====
+// ===== START =====
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("Server running on port", PORT);
 });
