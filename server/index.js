@@ -16,28 +16,22 @@ app.use(express.static("public"));
 const PORT = process.env.PORT || 8080;
 
 /* =========================
-   🧠 SCRIPT
+   SCRIPT
 ========================= */
 async function generateScript(prompt) {
   return `Here’s the truth about ${prompt}.
 
 It doesn’t happen overnight.
 
-Every successful person you admire started with nothing but an idea and the willingness to keep going.
+Every successful person you admire started with nothing but an idea.
 
 Consistency beats motivation every single time.
 
-Because motivation fades… but discipline builds results.
-
-So if you want to succeed, start small.
-
-Take action today.
-
-And don’t stop.`;
+Start small, stay consistent, and never quit.`;
 }
 
 /* =========================
-   🎥 PEXELS
+   PEXELS
 ========================= */
 async function getClips(query) {
   const res = await axios.get(
@@ -53,7 +47,7 @@ async function getClips(query) {
 }
 
 /* =========================
-   ⬇️ DOWNLOAD
+   DOWNLOAD
 ========================= */
 async function downloadFile(url, output) {
   const res = await axios({
@@ -72,7 +66,7 @@ async function downloadFile(url, output) {
 }
 
 /* =========================
-   🔊 VOICE (ElevenLabs)
+   VOICE
 ========================= */
 async function generateVoice(script) {
   const response = await axios({
@@ -91,42 +85,11 @@ async function generateVoice(script) {
 
   const filePath = "public/voice.mp3";
   fs.writeFileSync(filePath, response.data);
-
   return filePath;
 }
 
 /* =========================
-   💬 CAPTIONS BUILDER
-========================= */
-function buildCaptions(lines) {
-  let time = 0;
-
-  return lines.map(line => {
-    const words = line.split(" ").length;
-
-    // smarter timing based on speech
-    const duration = Math.max(2, words * 0.4);
-
-    const start = time;
-    const end = time + duration;
-    time += duration;
-
-    const clean = line
-      .replace(/'/g, "")
-      .replace(/:/g, "")
-      .replace(/,/g, "")
-      .trim();
-
-    return `drawtext=text='${clean}':
-    fontcolor=white:fontsize=48:
-    box=1:boxcolor=black@0.5:
-    x=(w-text_w)/2:y=h-200:
-    enable='between(t,${start},${end})'`;
-  }).join(",");
-}
-
-/* =========================
-   🎬 MAIN ROUTE
+   MAIN ROUTE
 ========================= */
 app.post("/generate-video", async (req, res) => {
   try {
@@ -135,19 +98,12 @@ app.post("/generate-video", async (req, res) => {
 
     if (!fs.existsSync("public")) fs.mkdirSync("public");
 
-    // 1. Script
+    // 1. script
     const script = await generateScript(prompt);
 
-    // 2. Split into caption lines
-    const lines = script
-  .split("\n")
-  .map(l => l.trim())
-  .filter(l => l.length > 0);
-
-    // 3. Get clips
+    // 2. clips
     const clips = await getClips(prompt);
 
-    // 4. Download clips
     const clipPaths = [];
     for (let i = 0; i < clips.length; i++) {
       const p = `public/clip_${i}.mp4`;
@@ -155,14 +111,14 @@ app.post("/generate-video", async (req, res) => {
       clipPaths.push(path.resolve(p));
     }
 
-    // 5. Create concat file
+    // 3. concat file
     const concatPath = "public/concat.txt";
     fs.writeFileSync(
       concatPath,
       clipPaths.map(p => `file '${p}'`).join("\n")
     );
 
-    // 6. Merge clips (RE-ENCODE FIX 🔥)
+    // 4. merge clips (FIXED)
     await execAsync(`
       ffmpeg -y \
       -f concat -safe 0 -i ${concatPath} \
@@ -172,41 +128,33 @@ app.post("/generate-video", async (req, res) => {
       public/final.mp4
     `);
 
-    // 7. Voice
+    // 5. voice
     const voicePath = await generateVoice(script);
 
-    // 8. Captions filter
-    const captions = buildCaptions(lines);
-
-    // 9. Final merge (VIDEO + AUDIO + CAPTIONS 🔥)
+    // 6. final merge (NO captions yet = stable)
     await execAsync(`
       ffmpeg -y \
       -i public/final.mp4 \
       -i ${voicePath} \
-      -vf "${captions.replace(/\n/g, "")}"
-      -c:v libx264 -preset fast -crf 23 \
+      -c:v copy \
       -c:a aac \
       -shortest \
       public/output.mp4
     `);
 
-    // 10. Return result
     res.json({
       videoUrl: "/output.mp4",
       script
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("ERROR:", err);
     res.status(500).json({ error: "Failed to generate video" });
   }
 });
 
-/* =========================
-   HEALTH CHECK
-========================= */
 app.get("/", (req, res) => {
-  res.send("AI Reel Studio running 🚀");
+  res.send("Backend running 🚀");
 });
 
 app.listen(PORT, () => {
