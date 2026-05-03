@@ -20,9 +20,9 @@ app.post("/generate-video", async (req, res) => {
     }
 
     const cmd = `
-      ffmpeg -y -loop 1 -i ${imagePath} \
-      -c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}
-    `;
+ffmpeg -y -loop 1 -i ${imagePath} \
+-c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}
+`;
 
     exec(cmd, (error, stdout, stderr) => {
       console.log("STDERR:", stderr);
