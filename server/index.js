@@ -55,11 +55,19 @@ app.post("/generate-video", async (req, res) => {
     const outputPath = path.join(process.cwd(), "server/public/output.mp4");
 
     // 5. Create video with ffmpeg
-    const command = `
-      ffmpeg -y -loop 1 -i "${imagePath}" -i "${audioPath}" \
-      -c:v libx264 -tune stillimage -c:a aac -b:a 192k \
-      -pix_fmt yuv420p -shortest "${outputPath}"
-    `;
+   const command = `
+ffmpeg -y \
+-loop 1 -i "${imagePath}" \
+-i "${audioPath}" \
+-vf "scale=720:-1" \
+-c:v libx264 \
+-preset veryfast \
+-tune stillimage \
+-c:a aac \
+-b:a 128k \
+-shortest \
+"${outputPath}"
+`;
 
     exec(command, (error, stdout, stderr) => {
       if (error) {
