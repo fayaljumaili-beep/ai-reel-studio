@@ -4,6 +4,25 @@ const captions = document.getElementById("captions");
 const status = document.getElementById("status");
 const btn = document.getElementById("generateBtn");
 
+async function waitForMedia(video, audio, timeout = 5000) {
+  return new Promise((resolve) => {
+    let loaded = 0;
+
+    function done() {
+      loaded++;
+      if (loaded >= 2) resolve();
+    }
+
+    video.onloadeddata = done;
+    audio.oncanplaythrough = done;
+
+    setTimeout(() => {
+      console.warn("Media timeout → forcing start");
+      resolve();
+    }, timeout);
+  });
+}
+
 async function generate() {
   const prompt = document.getElementById("prompt").value;
 
@@ -13,34 +32,35 @@ async function generate() {
   try {
     const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt })
     });
 
     const data = await res.json();
 
-    // FORCE refresh (avoid cache)
     const ts = Date.now();
 
-    video.src = `${window.location.origin}/output.mp4?t=${ts}`;
+    video.src = `${data.video}?t=${ts}`;
     audio.src = `${data.audio}?t=${ts}`;
 
     video.load();
     audio.load();
 
-    // WAIT until both are ready
-    await Promise.all([
-      new Promise(res => video.onloadeddata = res),
-      new Promise(res => audio.oncanplaythrough = res)
-    ]);
+    await waitForMedia(video, audio);
 
     video.currentTime = 0;
     audio.currentTime = 0;
 
-    await audio.play();
-    await video.play();
+    try {
+      await audio.play();
+      await video.play();
+    } catch {
+      status.innerText = "👉 Tap video to play";
+      video.onclick = () => {
+        video.play();
+        audio.play();
+      };
+    }
 
     status.innerText = "▶ Playing";
 
@@ -48,7 +68,7 @@ async function generate() {
 
   } catch (err) {
     console.error(err);
-    status.innerText = "❌ Error";
+    status.innerText = "❌ Error generating";
   }
 
   btn.disabled = false;
@@ -68,19 +88,13 @@ function startCaptions(text) {
 
   const spans = document.querySelectorAll(".word");
 
-  // 🔥 REAL SYNC USING AUDIO TIME
   audio.ontimeupdate = () => {
-    const time = audio.currentTime;
-
-    // adjust this divisor to control speed
-    const index = Math.floor(time * 2.5);
+    const index = Math.floor(audio.currentTime * 2.5);
 
     spans.forEach((span, i) => {
       span.classList.toggle("active", i === index);
-    });
 
-    // OPTIONAL: show only last few words (clean look)
-    spans.forEach((span, i) => {
+      // show only nearby words (clean UI)
       span.style.display =
         i >= index - 3 && i <= index + 3 ? "inline" : "none";
     });

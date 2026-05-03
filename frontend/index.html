@@ -2,128 +2,88 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Reel Studio</title>
 
   <style>
     body {
-      margin: 0;
       background: #000;
       color: #fff;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: Arial;
+      text-align: center;
       padding: 20px;
     }
 
     h1 {
       margin-bottom: 20px;
-      font-size: 28px;
-    }
-
-    .container {
-      width: 100%;
-      max-width: 400px;
-      text-align: center;
     }
 
     input {
-      width: 100%;
+      width: 80%;
       padding: 12px;
       border-radius: 10px;
       border: none;
       margin-bottom: 10px;
-      font-size: 14px;
     }
 
     button {
-      width: 100%;
-      padding: 12px;
+      padding: 12px 20px;
       border: none;
       border-radius: 10px;
-      background: linear-gradient(45deg, #ff4dff, #6a00ff);
+      background: linear-gradient(45deg, pink, purple);
       color: white;
       font-weight: bold;
       cursor: pointer;
-      font-size: 16px;
     }
 
     button:disabled {
-      opacity: 0.5;
-    }
-
-    #status {
-      margin-top: 10px;
-      font-size: 14px;
-    }
-
-    .video-container {
-      position: relative;
-      margin-top: 20px;
-      width: 100%;
+      opacity: 0.6;
     }
 
     video {
-      width: 100%;
+      width: 300px;
       border-radius: 15px;
+      margin-top: 20px;
     }
 
-    /* 🎬 TIKTOK STYLE CAPTIONS */
     #captions {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 90%;
-      text-align: center;
-      font-size: 26px;
-      font-weight: 800;
-      line-height: 1.3;
-      pointer-events: none;
-      background: rgba(0,0,0,0.3);
-      padding: 10px;
-      border-radius: 10px;
+      margin-top: 20px;
+      font-size: 18px;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.6;
     }
 
     .word {
-      opacity: 0.2;
-      margin-right: 6px;
-      transition: all 0.2s ease;
+      opacity: 0.3;
+      transition: 0.2s;
     }
 
     .word.active {
-      opacity: 1;
       color: #ff4dff;
-      transform: scale(1.15);
-      text-shadow: 0 0 12px #ff4dff;
-    }
-
-    audio {
-      display: none;
+      opacity: 1;
+      transform: scale(1.1);
+      font-weight: bold;
     }
   </style>
 </head>
 
 <body>
 
-  <h1 id="title">AI Reel Studio</h1>
+  <h1>AI Reel Studio</h1>
 
-  <div class="container">
-    <input id="prompt" placeholder="Enter your idea..." />
-    <button id="generateBtn" onclick="generate()">Generate</button>
+  <input id="prompt" placeholder="Enter your idea..." />
+  <br />
 
-    <p id="status"></p>
+  <button id="generateBtn" onclick="generate()">Generate</button>
 
-    <div class="video-container">
-      <video id="video" playsinline></video>
-      <div id="captions"></div>
-    </div>
+  <p id="status"></p>
 
-    <audio id="audio"></audio>
-  </div>
+  <video id="video" controls></video>
+  <audio id="audio"></audio>
 
-  <!-- JS -->
+  <div id="captions"></div>
+
   <script src="index.js"></script>
 
 </body>
