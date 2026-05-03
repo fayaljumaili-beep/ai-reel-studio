@@ -16,8 +16,7 @@ app.post("/generate-video", async (req, res) => {
     const outputPath = path.join(__dirname, "public", "output.mp4");
 
     // ✅ CLEAN ffmpeg command (no multiline issues)
-    const cmd = `ffmpeg -y -loop 1 -i "${imagePath}" -c:v libx264 -t 5 -pix_fmt yuv420p "${outputPath}"`;
-
+   const cmd = `ffmpeg -y -loop 1 -i "${imagePath}" -vf "scale=720:1280:force_original_aspect_ratio=decrease" -c:v libx264 -preset ultrafast -t 3 -pix_fmt yuv420p "${outputPath}"`;
     exec(cmd, (error, stdout, stderr) => {
       console.log("FFMPEG STDERR:", stderr);
 
