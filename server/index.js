@@ -32,10 +32,9 @@ app.post("/generate-video", async (req, res) => {
     }
 
     const cmd = `
-      ffmpeg -y -loop 1 -i ${imagePath} -i ${audioPath} \
-      -c:v libx264 -tune stillimage -c:a aac -b:a 192k \
-      -pix_fmt yuv420p -shortest ${outputPath}
-    `;
+  ffmpeg -y -loop 1 -i ${imagePath} \
+  -c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}
+`;
 
     exec(cmd, (error) => {
       if (error) {
