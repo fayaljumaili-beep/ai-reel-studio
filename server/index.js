@@ -1,62 +1,33 @@
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const fs = require("fs");
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
-
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Serve static files from /public
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// 🚀 MAIN ROUTE
-app.get("/generate-video", async (req, res) => {
-  try {
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+// ✅ THIS is the route your frontend calls
+app.post("/generate-video", (req, res) => {
+  console.log("Prompt:", req.body.prompt);
 
-    // ✅ Correct file paths
-    const videoPath = path.join(__dirname, "public", "output.mp4");
-    const audioPath = path.join(__dirname, "public", "audio.mp3");
-
-    console.log("📦 Checking files...");
-    console.log("Video path:", videoPath);
-    console.log("Audio path:", audioPath);
-
-    // ❌ If files missing → return error
-    if (!fs.existsSync(videoPath)) {
-      console.error("❌ Missing output.mp4");
-      return res.status(500).json({ error: "Missing output.mp4" });
-    }
-
-    if (!fs.existsSync(audioPath)) {
-      console.error("❌ Missing audio.mp3");
-      return res.status(500).json({ error: "Missing audio.mp3" });
-    }
-
-    // ✅ Build URLs
-    const videoUrl = `${baseUrl}/output.mp4`;
-    const audioUrl = `${baseUrl}/audio.mp3`;
-
-    console.log("✅ Sending response");
-
-    res.json({
-      script: "Generated script placeholder",
-      video: videoUrl,
-      audio: audioUrl,
-    });
-
-  } catch (err) {
-    console.error("🔥 SERVER ERROR:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  res.json({
+    video: "https://ai-reel-studio-production.up.railway.app/output.mp4",
+    audio: "https://ai-reel-studio-production.up.railway.app/audio.mp3"
+  });
 });
 
-// ✅ Start server
-const PORT = process.env.PORT || 8080;
+// test route (optional)
+app.get("/", (req, res) => {
+  res.send("API running");
+});
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(8080, () => {
+  console.log("Server running on port 8080");
 });

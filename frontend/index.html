@@ -1,88 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>AI Reel Studio</title>
-
-  <style>
-    body {
-      background: #000;
-      color: #fff;
-      font-family: Arial;
-      text-align: center;
-      padding: 20px;
-    }
-
-    h1 {
-      margin-bottom: 20px;
-    }
-
-    input {
-      width: 80%;
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      margin-bottom: 10px;
-    }
-
-    button {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 10px;
-      background: linear-gradient(45deg, pink, purple);
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-    }
-
-    video {
-      width: 300px;
-      border-radius: 15px;
-      margin-top: 20px;
-    }
-
-    #captions {
-      margin-top: 20px;
-      font-size: 18px;
-      max-width: 300px;
-      margin-left: auto;
-      margin-right: auto;
-      line-height: 1.6;
-    }
-
-    .word {
-      opacity: 0.3;
-      transition: 0.2s;
-    }
-
-    .word.active {
-      color: #ff4dff;
-      opacity: 1;
-      transform: scale(1.1);
-      font-weight: bold;
-    }
-  </style>
 </head>
-
-<body>
+<body style="background:black; color:white; text-align:center; font-family:sans-serif">
 
   <h1>AI Reel Studio</h1>
 
-  <input id="prompt" placeholder="Enter your idea..." />
-  <br />
+  <input id="prompt" placeholder="Enter prompt" style="width:300px; padding:10px;" />
+
+  <br><br>
 
   <button id="generateBtn" onclick="generate()">Generate</button>
 
   <p id="status"></p>
 
-  <video id="video" controls></video>
-<audio id="audio"></audio>
-
-  <div id="captions"></div>
+  <video id="video" width="300" controls></video>
+  <audio id="audio"></audio>
 
   <script src="index.js"></script>
 
