@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>AI Reel Studio</title>
+
   <style>
     body {
       background: black;
@@ -34,12 +35,13 @@
       border-radius: 10px;
     }
 
-    #script {
+    #captions {
       margin-top: 20px;
-      text-align: left;
+      font-size: 18px;
       max-width: 400px;
       margin-left: auto;
       margin-right: auto;
+      line-height: 1.6;
     }
   </style>
 </head>
@@ -56,7 +58,7 @@
 
   <video id="video" controls></video>
 
-  <div id="script"></div>
+  <div id="captions"></div>
 
   <script>
     async function generate() {
@@ -64,10 +66,10 @@
 
       const status = document.getElementById("status");
       const video = document.getElementById("video");
-      const scriptBox = document.getElementById("script");
+      const captions = document.getElementById("captions");
 
       status.innerText = "⏳ Generating...";
-      scriptBox.innerText = "";
+      captions.innerText = "";
 
       try {
         const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
@@ -80,19 +82,40 @@
 
         const data = await res.json();
 
-        console.log(data); // DEBUG
+        console.log(data);
 
-        // IMPORTANT: use backend video URL
+        // 🎥 load video
         video.src = data.videoUrl;
 
-        // show script
-        scriptBox.innerText = data.script || "No script returned";
+        // 🎙️ play voice
+        const audio = new Audio(data.audioUrl);
+        audio.play();
+
+        // 📝 captions
+        showCaptions(data.script);
 
         status.innerText = "✅ Done!";
+
       } catch (err) {
         console.error(err);
         status.innerText = "❌ Error";
       }
+    }
+
+    function showCaptions(script) {
+      const words = script.split(" ");
+      let i = 0;
+
+      const captions = document.getElementById("captions");
+
+      const interval = setInterval(() => {
+        captions.innerText += words[i] + " ";
+        i++;
+
+        if (i >= words.length) {
+          clearInterval(interval);
+        }
+      }, 180);
     }
   </script>
 
