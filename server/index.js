@@ -1,5 +1,5 @@
 import express from "express";
-// REMOVE node-fetch entirely (Node 18+ already has fetch)
+import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
@@ -8,6 +8,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
+
+app.use(cors({
+  origin: "*"
+}));
+
 app.use(express.json());
 app.use(express.static("public"));
 
