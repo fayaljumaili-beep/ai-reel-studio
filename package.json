@@ -1,6 +1,10 @@
 {
-  "name": "ai-reel-frontend",
+  "name": "ai-reel-backend",
   "version": "1.0.0",
-  "private": true,
-  "type": "module"
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
 }
