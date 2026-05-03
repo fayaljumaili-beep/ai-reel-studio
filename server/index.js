@@ -59,7 +59,7 @@ app.post("/generate-video", async (req, res) => {
 
     // ✅ ALWAYS return safe response
     res.json({
-      videoUrl: "/output.mp4",
+      videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4",
       script: scriptText
     });
 
