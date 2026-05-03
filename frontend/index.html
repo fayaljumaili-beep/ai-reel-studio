@@ -42,6 +42,7 @@
       margin-left: auto;
       margin-right: auto;
       line-height: 1.6;
+      white-space: normal;
     }
   </style>
 </head>
@@ -56,7 +57,7 @@
 
   <p id="status"></p>
 
-  <video id="video" controls></video>
+  <video id="video" playsinline></video>
 
   <div id="captions"></div>
 
@@ -82,19 +83,27 @@
 
         const data = await res.json();
 
-        console.log(data);
-
-        // 🎥 load video
-        video.src = data.videoUrl;
-
-        // 🎙️ play voice
+        // prepare audio
         const audio = new Audio(data.audioUrl);
-        audio.play();
 
-        // 📝 captions
-        showCaptions(data.script);
+        // set video
+        video.src = data.videoUrl;
+        video.load();
 
-        status.innerText = "✅ Done!";
+        // 🔥 wait for video to be ready
+        video.oncanplaythrough = async () => {
+          try {
+            // start ALL together
+            await video.play();
+            await audio.play();
+            showCaptions(data.script);
+
+            status.innerText = "✅ Synced!";
+          } catch (err) {
+            console.error(err);
+            status.innerText = "❌ Click screen to start";
+          }
+        };
 
       } catch (err) {
         console.error(err);
@@ -107,6 +116,7 @@
       let i = 0;
 
       const captions = document.getElementById("captions");
+      captions.innerText = "";
 
       const interval = setInterval(() => {
         captions.innerText += words[i] + " ";

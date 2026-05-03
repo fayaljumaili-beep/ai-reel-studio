@@ -6,7 +6,7 @@ import OpenAI from "openai";
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// init OpenAI
+// OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -62,7 +62,7 @@ app.post("/generate-video", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
