@@ -1,24 +1,19 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>AI Reel Studio</title>
-</head>
-<body style="background:black; color:white; text-align:center; font-family:sans-serif">
+  <body style="background:black; color:white; text-align:center; font-family:sans-serif;">
+    
+    <h1>AI Reel Studio</h1>
 
-  <h1>AI Reel Studio</h1>
+    <input id="prompt" placeholder="Enter prompt" style="width:300px; padding:10px;" />
+    
+    <br><br>
 
-  <input id="prompt" placeholder="Enter prompt" style="width:300px; padding:10px;" />
+    <button id="generateBtn" onclick="generate()">Generate</button>
 
-  <br><br>
+    <p id="status"></p>
 
-  <button id="generateBtn" onclick="generate()">Generate</button>
+    <video id="video" width="300" controls></video>
 
-  <p id="status"></p>
-
-  <video id="video" width="300" controls></video>
-  <audio id="audio"></audio>
-
-  <script src="index.js"></script>
-
-</body>
+    <script src="index.js"></script>
+  </body>
 </html>

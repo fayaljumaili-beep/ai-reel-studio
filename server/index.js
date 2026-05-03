@@ -3,18 +3,15 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import OpenAI from "openai";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// IMPORTANT: serve static files
-app.use("/public", express.static(path.join(process.cwd(), "server/public")));
+// 🔥 IMPORTANT — serve public files
+app.use(express.static("public"));
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const PORT = process.env.PORT || 8080;
 
 app.post("/generate-video", async (req, res) => {
   try {
@@ -22,54 +19,25 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("Prompt:", prompt);
 
-    // 1. Generate script
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: `Write a short motivational script about: ${prompt}`,
-        },
-      ],
-    });
+    const imagePath = path.join("public", "input.jpg");
+    const audioPath = path.join("public", "audio.mp3");
+    const outputPath = path.join("public", "output.mp4");
 
-    const script = completion.choices[0].message.content;
-    console.log("Script:", script);
+    // 🧠 Basic check (prevents silent crashes)
+    if (!fs.existsSync(imagePath)) {
+      return res.status(500).json({ error: "input.jpg missing" });
+    }
+    if (!fs.existsSync(audioPath)) {
+      return res.status(500).json({ error: "audio.mp3 missing" });
+    }
 
-    // 2. Generate voice
-    const audioPath = path.join(process.cwd(), "server/public/audio.mp3");
+    const cmd = `
+      ffmpeg -y -loop 1 -i ${imagePath} -i ${audioPath} \
+      -c:v libx264 -tune stillimage -c:a aac -b:a 192k \
+      -pix_fmt yuv420p -shortest ${outputPath}
+    `;
 
-    const audioResponse = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: script,
-    });
-
-    const buffer = Buffer.from(await audioResponse.arrayBuffer());
-    fs.writeFileSync(audioPath, buffer);
-
-    // 3. Image path (FIXED)
-    const imagePath = path.join(process.cwd(), "server/public/input.jpg");
-
-    // 4. Output video
-    const outputPath = path.join(process.cwd(), "server/public/output.mp4");
-
-    // 5. Create video with ffmpeg
-   const command = `
-ffmpeg -y \
--loop 1 -i "${imagePath}" \
--i "${audioPath}" \
--vf "scale=720:-1" \
--c:v libx264 \
--preset veryfast \
--tune stillimage \
--c:a aac \
--b:a 128k \
--shortest \
-"${outputPath}"
-`;
-
-    exec(command, (error, stdout, stderr) => {
+    exec(cmd, (error) => {
       if (error) {
         console.error("FFmpeg error:", error);
         return res.status(500).json({ error: "Video generation failed" });
@@ -77,17 +45,17 @@ ffmpeg -y \
 
       console.log("Video created!");
 
-      // 6. Return video URL
       res.json({
-        videoUrl: `https://ai-reel-studio-production.up.railway.app/output.mp4`
-});
+        videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4"
+      });
     });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-app.listen(8080, () => {
-  console.log("Server running on port 8080");
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
