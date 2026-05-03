@@ -2,42 +2,36 @@ async function generate() {
   const prompt = document.getElementById("prompt").value;
   const video = document.getElementById("video");
   const status = document.getElementById("status");
-  const btn = document.getElementById("generateBtn");
 
-  btn.disabled = true;
-  status.innerText = "Generating...";
+  status.innerText = "Rendering...";
+  video.src = "";
 
   try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+    const res = await fetch("https://YOUR-RAILWAY-URL/generate-video", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt }),
     });
 
     const data = await res.json();
 
-    console.log("DATA:", data);
-
-    if (!data.videoUrl) {
-      throw new Error("No video URL returned");
+    if (!res.ok) {
+      status.innerText = "Error ❌";
+      console.error(data);
+      return;
     }
 
-    const ts = Date.now();
+    status.innerText = "Done ✅";
 
-    video.src = `https://ai-reel-studio-production.up.railway.app${data.videoUrl}?t=${ts}`;
+    const ts = Date.now(); // prevent caching
+    video.src = `${data.videoUrl}?t=${ts}`;
     video.load();
-
-    video.onloadeddata = () => {
-      video.play();
-      status.innerText = "Done ✅";
-      btn.disabled = false;
-    };
+    video.play();
 
   } catch (err) {
     console.error(err);
     status.innerText = "Error ❌";
-    btn.disabled = false;
   }
 }
