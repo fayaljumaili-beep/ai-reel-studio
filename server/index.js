@@ -19,10 +19,7 @@ app.post("/generate-video", async (req, res) => {
       return res.status(500).json({ error: "input.jpg missing" });
     }
 
-    const cmd = `
-ffmpeg -y -loop 1 -i ${imagePath} \
--c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}
-`;
+    const cmd = `ffmpeg -y -loop 1 -i ${imagePath} -c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}`;
 
     exec(cmd, (error, stdout, stderr) => {
       console.log("STDERR:", stderr);
