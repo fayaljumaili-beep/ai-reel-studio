@@ -36,18 +36,20 @@ app.post("/generate-video", async (req, res) => {
   -c:v libx264 -t 5 -pix_fmt yuv420p ${outputPath}
 `;
 
-    exec(cmd, (error) => {
-      if (error) {
-        console.error("FFmpeg error:", error);
-        return res.status(500).json({ error: "Video generation failed" });
-      }
+    exec(cmd, (error, stdout, stderr) => {
+  console.log("STDERR:", stderr);
 
-      console.log("Video created!");
+  if (error) {
+    console.error("FFmpeg error:", error);
+    return res.status(500).json({ error: "Video generation failed" });
+  }
 
-      res.json({
-        videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4"
-      });
-    });
+  console.log("Video created!");
+
+  res.json({
+    videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4"
+  });
+});
 
   } catch (err) {
     console.error(err);
