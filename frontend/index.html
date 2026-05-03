@@ -86,7 +86,7 @@ async function generate() {
 
     const data = await res.json();
 
-    video.src = "https://ai-reel-studio-production.up.railway.app" + data.videoUrl;
+    video.src = "https://ai-reel-studio-production.up.railway.app/output.mp4";
     scriptBox.innerText = data.script;
 
     status.innerText = "✅ Done!";

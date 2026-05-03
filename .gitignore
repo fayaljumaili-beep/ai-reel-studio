@@ -1,89 +1,66 @@
 # -------------------------
-
 # Logs
-
 # -------------------------
-
 logs
 *.log
 yarn-error.log*
 pnpm-debug.log*
 
 # -------------------------
-
 # Node
-
 # -------------------------
-
 node_modules/
 
 # -------------------------
-
 # Environment (SECRETS)
-
 # -------------------------
-
 .env
 .env*
 !.env.example
 
 # -------------------------
-
 # Build / Output
-
 # -------------------------
-
 .next
 dist
 build
-output*
+
+# ❌ REMOVE BROKEN RULE:
+# output*
 
 # -------------------------
-
-# Generated media (VERY IMPORTANT)
-
+# Generated media
 # -------------------------
-
-# ignore ONLY generated files
+# ignore generated videos EXCEPT the one we need
 output.mp4
 final-reel.mp4
 /tmp/
 
-# -------------------------
+# ✅ allow the main video file
+!public/output.mp4
 
+# -------------------------
 # Video / assets folders
-
 # -------------------------
-
 server/assets/videos/
 
-# keep folder structure if needed
-
+# allow folder structure if needed
 !server/assets/videos/
 !server/assets/videos/*.mp4
 
 # -------------------------
-
 # Vercel / deployment
-
 # -------------------------
-
 .vercel
 
 # -------------------------
-
 # TypeScript
-
 # -------------------------
-
 *.tsbuildinfo
 next-env.d.ts
 
 # -------------------------
-
 # OS junk
-
 # -------------------------
-
 .DS_Store
 Thumbs.db
