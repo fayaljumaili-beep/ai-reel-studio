@@ -9,55 +9,45 @@ async function generate() {
   status.innerText = "⚡ Generating...";
 
   try {
+    // 🔥 CALL YOUR BACKEND
     const res = await fetch(
       "https://ai-reel-studio-production.up.railway.app/generate-video",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       }
     );
 
     const data = await res.json();
 
-    // 🔄 Force refresh (avoid cache issues)
+    // 🔥 FORCE REFRESH (VERY IMPORTANT)
     const timestamp = Date.now();
 
-    video.src = `${window.location.origin}/output.mp4?t=${timestamp}`;
-    audio.src = `${data.audio}?t=${timestamp}`;
+    video.src =
+      "https://ai-reel-studio-production.up.railway.app/output.mp4?" +
+      timestamp;
+
+    audio.src = data.audio + "?" + timestamp;
 
     video.load();
     audio.load();
 
+    // 🔥 WAIT UNTIL BOTH READY
+    await Promise.all([
+      new Promise((res) => (video.onloadeddata = res)),
+      new Promise((res) => (audio.oncanplaythrough = res)),
+    ]);
+
+    // 🔥 START TOGETHER
     video.currentTime = 0;
     audio.currentTime = 0;
 
-    // ⏳ Wait for both media to be ready
-    await Promise.all([
-      new Promise((resolve) => (video.onloadeddata = resolve)),
-      new Promise((resolve) => (audio.oncanplaythrough = resolve)),
-    ]);
-
-    // ▶️ Start both together
-    video.muted = true;
-
-    try {
-      await video.play();
-      await audio.play();
-    } catch {
-      status.innerText = "👉 Tap to play";
-
-      video.onclick = () => {
-        video.play();
-        audio.play();
-      };
-    }
+    await audio.play();
+    await video.play();
 
     status.innerText = "✅ Playing";
 
-    // 📝 Show captions
     showCaptions(data.script);
   } catch (err) {
     console.error(err);
@@ -65,6 +55,7 @@ async function generate() {
   }
 }
 
+// 🎯 CAPTIONS (FIXED SPACING)
 function showCaptions(text) {
   captions.innerHTML = "";
 
@@ -73,20 +64,20 @@ function showCaptions(text) {
   words.forEach((word) => {
     const span = document.createElement("span");
     span.className = "word";
-    span.innerText = word + " "; // 👈 spacing fix
+    span.innerText = word + " "; // 🔥 THIS FIXES YOUR SPACING
     captions.appendChild(span);
   });
 
   const spans = document.querySelectorAll(".word");
 
-  let index = 0;
+  let i = 0;
 
   const interval = setInterval(() => {
-    if (index < spans.length) {
-      spans[index].classList.add("active");
-      index++;
+    if (i < spans.length) {
+      spans[i].classList.add("active");
+      i++;
     } else {
       clearInterval(interval);
     }
-  }, 350); // adjust speed if needed
+  }, 350);
 }
