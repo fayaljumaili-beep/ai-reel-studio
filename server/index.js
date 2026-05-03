@@ -2,22 +2,15 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { exec } from "child_process";
 import OpenAI from "openai";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ FIX: absolute public path
-const publicDir = path.join(process.cwd(), "public");
-
-// ✅ FIX: ensure folder exists
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir);
-}
-
-app.use(express.static(publicDir));
+// IMPORTANT: serve static files
+app.use("/public", express.static(path.join(process.cwd(), "server/public")));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -26,81 +19,64 @@ const openai = new OpenAI({
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
+
     console.log("Prompt:", prompt);
 
-    // -------------------------
-    // 1. GENERATE SCRIPT
-    // -------------------------
+    // 1. Generate script
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
-          content: `Write a short motivational script for: ${prompt}`,
+          content: `Write a short motivational script about: ${prompt}`,
         },
       ],
     });
 
     const script = completion.choices[0].message.content;
+    console.log("Script:", script);
 
-    // -------------------------
-    // 2. GENERATE AUDIO
-    // -------------------------
-    const speech = await openai.audio.speech.create({
+    // 2. Generate voice
+    const audioPath = path.join(process.cwd(), "server/public/audio.mp3");
+
+    const audioResponse = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
       voice: "alloy",
       input: script,
     });
 
-    const audioPath = path.join(publicDir, "audio.mp3");
-    const audioBuffer = Buffer.from(await speech.arrayBuffer());
+    const buffer = Buffer.from(await audioResponse.arrayBuffer());
+    fs.writeFileSync(audioPath, buffer);
 
-    fs.writeFileSync(audioPath, audioBuffer);
+    // 3. Image path (FIXED)
+    const imagePath = path.join(process.cwd(), "server/public/input.jpg");
 
-    // -------------------------
-    // 3. CREATE CAPTIONS
-    // -------------------------
-    const srtPath = path.join(publicDir, "subtitles.srt");
+    // 4. Output video
+    const outputPath = path.join(process.cwd(), "server/public/output.mp4");
 
-    const words = script.split(" ");
-    let srt = "";
-    let time = 0;
+    // 5. Create video with ffmpeg
+    const command = `
+      ffmpeg -y -loop 1 -i "${imagePath}" -i "${audioPath}" \
+      -c:v libx264 -tune stillimage -c:a aac -b:a 192k \
+      -pix_fmt yuv420p -shortest "${outputPath}"
+    `;
 
-    words.forEach((word, i) => {
-      srt += `${i + 1}\n`;
-      srt += `00:00:${String(time).padStart(2, "0")},000 --> 00:00:${String(time + 1).padStart(2, "0")},000\n`;
-      srt += `${word}\n\n`;
-      time++;
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        console.error("FFmpeg error:", error);
+        return res.status(500).json({ error: "Video generation failed" });
+      }
+
+      console.log("Video created!");
+
+      // 6. Return video URL
+      res.json({
+        videoUrl: `${req.protocol}://${req.get("host")}/public/output.mp4`,
+      });
     });
-
-    fs.writeFileSync(srtPath, srt);
-
-    // -------------------------
-    // 4. VIDEO GENERATION
-    // -------------------------
-    const inputImage = path.join(publicDir, "input.jpg");
-    const outputVideo = path.join(publicDir, "output.mp4");
-
-    execSync(`
-      ffmpeg -y -loop 1 -i ${inputImage} -i ${audioPath} \
-      -vf "subtitles=${srtPath}:force_style='Fontsize=24'" \
-      -shortest -c:v libx264 -c:a aac ${outputVideo}
-    `);
-
-    console.log("Video created!");
-
-    // -------------------------
-    // 5. RETURN
-    // -------------------------
-    res.json({
-      video: `${req.protocol}://${req.get("host")}/output.mp4`,
-      audio: `${req.protocol}://${req.get("host")}/audio.mp3`,
-      script,
-    });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to generate video" });
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
