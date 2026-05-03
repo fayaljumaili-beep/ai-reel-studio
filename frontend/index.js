@@ -3,7 +3,7 @@ async function generate() {
   const video = document.getElementById("video");
   const status = document.getElementById("status");
 
-  status.innerText = "Rendering...";
+  status.innerText = "🔥 Generating viral reel...";
   video.src = "";
 
   try {
@@ -18,14 +18,14 @@ async function generate() {
     const data = await res.json();
 
     if (!res.ok) {
-      status.innerText = "Error ❌";
       console.error(data);
+      status.innerText = "Error ❌";
       return;
     }
 
-    status.innerText = "Done ✅";
+    status.innerText = "Ready 🚀";
 
-    const ts = Date.now(); // prevent caching
+    const ts = Date.now();
     video.src = `${data.videoUrl}?t=${ts}`;
     video.load();
     video.play();
