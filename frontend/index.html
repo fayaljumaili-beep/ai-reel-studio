@@ -1,89 +1,84 @@
-const video = document.getElementById("video");
-const audio = document.getElementById("audio");
-const captions = document.getElementById("captions");
-const status = document.getElementById("status");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Reel Studio</title>
 
-async function generate() {
-  const prompt = document.getElementById("prompt").value;
-
-  status.innerText = "⚡ Generating...";
-
-  try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ prompt })
-    });
-
-    const data = await res.json();
-
-    // FORCE refresh (avoid cache)
-    const timestamp = Date.now();
-
-    video.src = `${window.location.origin}/output.mp4?t=${timestamp}`;
-    audio.src = `${data.audio}?t=${timestamp}`;
-
-    video.load();
-    audio.load();
-
-    video.currentTime = 0;
-    audio.currentTime = 0;
-
-    // WAIT for both to be ready
-    await Promise.all([
-      new Promise(res => video.onloadeddata = res),
-      new Promise(res => audio.oncanplaythrough = res)
-    ]);
-
-    // START BOTH TOGETHER
-    video.muted = true;
-
-    try {
-      await video.play();
-      await audio.play();
-    } catch {
-      status.innerText = "👉 Tap to play";
-
-      video.onclick = () => {
-        video.play();
-        audio.play();
-      };
+  <style>
+    body {
+      background: #000;
+      color: #fff;
+      font-family: Arial;
+      text-align: center;
+      padding: 20px;
     }
 
-    status.innerText = "✅ Playing";
-
-    showCaptions(data.script);
-
-  } catch (err) {
-    console.error(err);
-    status.innerText = "❌ Error generating video";
-  }
-}
-
-function showCaptions(text) {
-  captions.innerHTML = "";
-
-  const words = text.split(" ");
-
-  words.forEach(word => {
-    const span = document.createElement("span");
-    span.className = "word";
-    span.innerText = word + " "; // ✅ FIX spacing
-    captions.appendChild(span);
-  });
-
-  const spans = document.querySelectorAll(".word");
-
-  let i = 0;
-
-  const interval = setInterval(() => {
-    if (i < spans.length) {
-      spans[i].classList.add("active");
-      i++;
-    } else {
-      clearInterval(interval);
+    h1 {
+      font-size: 28px;
+      margin-bottom: 20px;
     }
-  }, 350); // adjust speed here
-}
+
+    input {
+      width: 80%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(45deg, pink, purple);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    video {
+      width: 300px;
+      border-radius: 15px;
+      margin-top: 20px;
+    }
+
+    #captions {
+      margin-top: 20px;
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .word.active {
+      color: #ff4dff;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>AI Reel Studio</h1>
+
+  <input id="prompt" placeholder="Enter your idea..." />
+  <br />
+  <button onclick="generate()">Generate</button>
+
+  <p id="status"></p>
+
+  <!-- 🎬 VIDEO -->
+  <video id="video" controls></video>
+
+  <!-- 🔊 AUDIO -->
+  <audio id="audio"></audio>
+
+  <!-- 📝 CAPTIONS -->
+  <div id="captions"></div>
+
+  <!-- JS -->
+  <script src="index.js"></script>
+
+</body>
+</html>
