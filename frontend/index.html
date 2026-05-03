@@ -86,7 +86,6 @@ async function generate() {
 
   status.innerText = "⚡ Generating...";
   captions.innerHTML = "";
-  video.src = ""; // reset instantly
 
   try {
     const res = await fetch(API + "/generate-video", {
@@ -101,29 +100,29 @@ async function generate() {
 
     const data = await res.json();
 
-    // ⚡ preload video instantly
-    video.src = data.videoUrl;
+    // 🎥 set video immediately
+    video.src = data.videoUrl + "?t=" + Date.now(); // cache bust
     video.load();
 
-    // 🎙️ prepare audio
-    const audio = new Audio(data.audioUrl);
+    // 🎙️ create audio
+    const audio = new Audio(data.audioUrl + "?t=" + Date.now());
     audio.preload = "auto";
 
-    // 🚀 PLAY EVERYTHING TOGETHER (NO DELAY)
-    video.oncanplay = () => {
+    // 🚀 START EVERYTHING IMMEDIATELY (NO WAIT)
+    setTimeout(() => {
       video.currentTime = 0;
 
-      video.play();
-      audio.play();
+      video.play().catch(() => {});
+      audio.play().catch(() => {});
 
       showCaptions(data.script);
 
       status.innerText = "✅ Done!";
-    };
+    }, 300); // small delay = smoother start
 
   } catch (err) {
     console.error(err);
-    status.innerText = "❌ Error loading";
+    status.innerText = "❌ Error";
   }
 }
 
@@ -142,7 +141,7 @@ function showCaptions(script) {
     captions.innerHTML = words
       .map((w, index) => {
         return index === i
-          ? `<span class="highlight">${w}</span>`
+          ? `<span style="color:#ff4dff;font-weight:bold">${w}</span>`
           : `<span style="opacity:0.6">${w}</span>`;
       })
       .join(" ");
