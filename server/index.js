@@ -79,8 +79,8 @@ ffmpeg -y \
 
       // 6. Return video URL
       res.json({
-        videoUrl: `${req.protocol}://${req.get("host")}/public/output.mp4`,
-      });
+        videoUrl: `https://ai-reel-studio-production.up.railway.app/output.mp4`
+});
     });
   } catch (err) {
     console.error(err);

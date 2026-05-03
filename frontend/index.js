@@ -20,20 +20,13 @@ async function generate() {
     const data = await res.json();
     console.log("DATA:", data);
 
-    const ts = Date.now();
+    video.src = data.videoUrl;
 
-    video.src = `${data.video}?t=${ts}`;
-    audio.src = `${data.audio}?t=${ts}`;
+video.load();
 
-    video.load();
-    audio.load();
-
-    video.onloadeddata = () => {
-      video.play();
-      audio.play();
-      status.innerText = "";
-      btn.disabled = false;
-    };
+video.onloadeddata = () => {
+  video.play();
+};
 
   } catch (err) {
     console.error(err);
