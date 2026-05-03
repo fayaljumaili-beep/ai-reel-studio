@@ -1,123 +1,97 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
-import { fileURLToPath } from "url";
 import OpenAI from "openai";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
-// --- paths ---
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const publicDir = path.join(__dirname, "public");
-
-// --- OpenAI ---
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// --- serve static files ---
-app.use(express.static(publicDir));
-
-// --- helper: transcribe audio ---
-async function transcribeAudio(filePath) {
-  const response = await openai.audio.transcriptions.create({
-    file: fs.createReadStream(filePath),
-    model: "gpt-4o-mini-transcribe"
-  });
-
-  return response.text;
-}
-
-// --- helper: format time ---
-function formatTime(seconds) {
-  const date = new Date(seconds * 1000).toISOString().substr(11, 12);
-  return date.replace(".", ",");
-}
-
-// --- helper: text → SRT ---
-function textToSRT(text) {
-  const words = text.split(" ");
-  let srt = "";
-  let i = 1;
-
-  for (let j = 0; j < words.length; j += 3) {
-    const chunk = words.slice(j, j + 3).join(" ");
-
-    const start = j * 0.5;
-    const end = start + 1.5;
-
-    srt += `${i}\n`;
-    srt += `${formatTime(start)} --> ${formatTime(end)}\n`;
-    srt += `${chunk}\n\n`;
-
-    i++;
-  }
-
-  return srt;
-}
-
-// --- helper: burn captions ---
-function burnCaptions(videoPath, srtPath, outputPath) {
-  execSync(
-  `ffmpeg -y -i "${videoPath}" \
-  -vf "subtitles=${srtPath}:force_style='FontSize=18'" \
-  -preset ultrafast \
-  -crf 32 \
-  -c:v libx264 \
-  -c:a aac \
-  -b:a 96k \
-  "${outputPath}"`,
-  { stdio: "inherit" }
-);
-}
-
-// --- main route ---
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("Prompt:", req.body.prompt);
+    const { prompt } = req.body;
+    console.log("Prompt:", prompt);
 
-    const audioPath = path.join(publicDir, "audio.mp3");
-    const videoPath = path.join(publicDir, "output.mp4");
-    const srtPath = path.join(publicDir, "subtitles.srt");
-    const finalPath = path.join(publicDir, "final.mp4");
+    // -------------------------
+    // 1. GENERATE SCRIPT
+    // -------------------------
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: `Write a short motivational script for a TikTok video about: ${prompt}. Keep it under 20 seconds.`,
+        },
+      ],
+    });
 
-    // 1. transcribe
-    console.log("Transcribing...");
-    const text = await transcribeAudio(audioPath);
+    const script = completion.choices[0].message.content;
+    console.log("Script:", script);
 
-    // 2. create subtitles
-    console.log("Creating subtitles...");
-    const srt = textToSRT(text);
-    fs.writeFileSync(srtPath, srt);
+    // -------------------------
+    // 2. GENERATE AUDIO (TTS)
+    // -------------------------
+    const speech = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: script,
+    });
 
-    // 3. burn captions
-    console.log("Burning captions...");
-    burnCaptions(videoPath, srtPath, finalPath);
+    const audioBuffer = Buffer.from(await speech.arrayBuffer());
+    fs.writeFileSync("public/audio.mp3", audioBuffer);
 
-    console.log("Done!");
+    // -------------------------
+    // 3. CREATE CAPTIONS (SRT)
+    // -------------------------
+    const words = script.split(" ");
+    let srt = "";
+    let time = 0;
 
+    words.forEach((word, i) => {
+      const start = time;
+      const end = time + 1;
+
+      srt += `${i + 1}\n`;
+      srt += `00:00:${String(start).padStart(2, "0")},000 --> 00:00:${String(end).padStart(2, "0")},000\n`;
+      srt += `${word}\n\n`;
+
+      time++;
+    });
+
+    fs.writeFileSync("public/subtitles.srt", srt);
+
+    // -------------------------
+    // 4. GENERATE VIDEO (loop image)
+    // -------------------------
+    execSync(`
+      ffmpeg -y -loop 1 -i public/input.jpg -i public/audio.mp3 \
+      -vf "subtitles=public/subtitles.srt:force_style='Fontsize=24,PrimaryColour=&Hffffff&'" \
+      -shortest -c:v libx264 -c:a aac public/output.mp4
+    `);
+
+    console.log("Video created!");
+
+    // -------------------------
+    // 5. RETURN FILES
+    // -------------------------
     res.json({
-      video: "https://ai-reel-studio-production.up.railway.app/final.mp4",
-      audio: "https://ai-reel-studio-production.up.railway.app/audio.mp3"
+      video: `${req.protocol}://${req.get("host")}/output.mp4`,
+      audio: `${req.protocol}://${req.get("host")}/audio.mp3`,
+      script,
     });
 
   } catch (err) {
-    console.error("ERROR:", err);
-    res.status(500).json({ error: "Caption generation failed" });
+    console.error(err);
+    res.status(500).json({ error: "Failed to generate video" });
   }
 });
 
-// --- health check ---
-app.get("/", (req, res) => {
-  res.send("Server running");
-});
-
-// --- start server ---
 app.listen(8080, () => {
   console.log("Server running on port 8080");
 });
