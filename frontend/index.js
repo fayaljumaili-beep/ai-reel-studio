@@ -7,7 +7,7 @@ async function generate() {
   video.src = "";
 
   try {
-    const res = await fetch("https://YOUR-RAILWAY-URL/generate-video", {
+    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
