@@ -1,22 +1,24 @@
 import express from "express";
 import cors from "cors";
 import fs from "fs";
-import OpenAI from "openai";
+import path from "path";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// script generator
+/*
+===========================
+🎯 HELPER: Generate Script
+===========================
+*/
 function generateScript(prompt) {
   return `Here's the truth about ${prompt}.
 
@@ -35,42 +37,87 @@ Stay focused, stay disciplined, and trust the process.
 Because if you keep showing up, success becomes inevitable.`;
 }
 
-// route
+/*
+===========================
+🎙️ HELPER: Generate Voice
+===========================
+Uses OpenAI TTS (or fallback)
+*/
+async function generateVoice(script) {
+  try {
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",
+        voice: "alloy",
+        input: script,
+      }),
+    });
+
+    const buffer = await response.arrayBuffer();
+
+    const filePath = path.join("public", "voice.mp3");
+    fs.writeFileSync(filePath, Buffer.from(buffer));
+
+    return "/voice.mp3";
+  } catch (err) {
+    console.log("❌ Voice generation failed, using fallback");
+
+    // fallback (your demo.mp3)
+    return "/demo.mp3";
+  }
+}
+
+/*
+===========================
+🚀 MAIN ROUTE
+===========================
+*/
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    // 1. generate script
     const script = generateScript(prompt);
 
-    // 🎙️ generate voice
-    const audioPath = "public/voice.mp3";
+    // 2. generate voice
+    const audioUrl = await generateVoice(script);
 
-    const mp3 = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: script
-    });
-
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    fs.writeFileSync(audioPath, buffer);
-
+    // 3. return everything frontend needs
     res.json({
+      success: true,
       script,
-      videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4",
-      audioUrl: "https://ai-reel-studio-production.up.railway.app/voice.mp3"
+      videoUrl: "/output.mp4", // your static video
+      audioUrl,
     });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
-// health
+/*
+===========================
+❤️ HEALTH CHECK
+===========================
+*/
 app.get("/", (req, res) => {
-  res.send("Server running");
+  res.send("Server is running 🚀");
 });
 
+/*
+===========================
+🚀 START SERVER
+===========================
+*/
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
