@@ -1,17 +1,18 @@
 import express from "express";
 import cors from "cors";
-import fs from "fs";
 import path from "path";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// ✅ middleware
+// middleware
 app.use(cors());
 app.use(express.json());
+
+// serve static files from /public
 app.use(express.static("public"));
 
-// ✅ helper: generate real script (NOT bullet points)
+// simple script generator
 function generateScript(prompt) {
   return `Here's the truth about ${prompt}.
 
@@ -30,49 +31,23 @@ Stay focused, stay disciplined, and trust the process.
 Because if you keep showing up, success becomes inevitable.`;
 }
 
-// ✅ health check
+// API route
+app.post("/generate-video", (req, res) => {
+  const { prompt } = req.body;
+
+  const script = generateScript(prompt);
+
+  res.json({
+    script,
+    videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4"
+  });
+});
+
+// health check
 app.get("/", (req, res) => {
-  res.send("AI Reel Studio Backend Running ✅");
+  res.send("Server running");
 });
 
-// ✅ MAIN ROUTE
-app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    console.log("🎯 Prompt:", prompt);
-
-    // ✅ generate script
-    const scriptText = generateScript(prompt);
-
-    // ✅ FAKE video for now (replace later with ffmpeg pipeline)
-    const videoPath = path.join("public", "output.mp4");
-
-    // if no video exists, just keep previous one OR skip creation
-    if (!fs.existsSync(videoPath)) {
-      console.log("⚠️ No video found, using placeholder");
-    }
-
-    // ✅ ALWAYS return safe response
-    res.json({
-      videoUrl: "https://ai-reel-studio-production.up.railway.app/output.mp4",
-      script: scriptText
-    });
-
-  } catch (err) {
-    console.error("🔥 ERROR:", err);
-
-    res.status(500).json({
-      error: err.message || "Server error"
-    });
-  }
-});
-
-// ✅ start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
