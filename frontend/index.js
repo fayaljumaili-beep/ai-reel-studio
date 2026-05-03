@@ -23,52 +23,36 @@ async function waitForMedia(video, audio, timeout = 5000) {
   });
 }
 
-async function generate() {
-  const prompt = document.getElementById("prompt").value;
+aasync function generate() {
+  const video = document.getElementById("video");
+  const audio = document.getElementById("audio");
+  const status = document.getElementById("status");
+  const btn = document.getElementById("generateBtn");
 
   btn.disabled = true;
-  status.innerText = "⚡ Generating...";
+  status.innerText = "Generating...";
 
   try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt })
-    });
-
+    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video");
     const data = await res.json();
+
+    console.log("DATA:", data); // 👈 debug
 
     const ts = Date.now();
 
     video.src = `${data.video}?t=${ts}`;
     audio.src = `${data.audio}?t=${ts}`;
 
-    video.load();
-    audio.load();
+    video.style.display = "block"; // 👈 make sure visible
 
-    await waitForMedia(video, audio);
+    await video.load();
+    await audio.load();
 
-    video.currentTime = 0;
-    audio.currentTime = 0;
-
-    try {
-      await audio.play();
-      await video.play();
-    } catch {
-      status.innerText = "👉 Tap video to play";
-      video.onclick = () => {
-        video.play();
-        audio.play();
-      };
-    }
-
-    status.innerText = "▶ Playing";
-
-    startCaptions(data.script);
+    status.innerText = "Done ✅";
 
   } catch (err) {
-    console.error(err);
-    status.innerText = "❌ Error generating";
+    console.error(err); // 👈 SEE REAL ERROR
+    status.innerText = "Error generating";
   }
 
   btn.disabled = false;
