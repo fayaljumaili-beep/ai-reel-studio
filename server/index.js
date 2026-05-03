@@ -64,8 +64,16 @@ function textToSRT(text) {
 // --- helper: burn captions ---
 function burnCaptions(videoPath, srtPath, outputPath) {
   execSync(
-    `ffmpeg -y -i "${videoPath}" -vf subtitles="${srtPath}" -c:a copy "${outputPath}"`
-  );
+  `ffmpeg -y -i "${videoPath}" \
+  -vf "subtitles=${srtPath}:force_style='FontSize=18'" \
+  -preset ultrafast \
+  -crf 32 \
+  -c:v libx264 \
+  -c:a aac \
+  -b:a 96k \
+  "${outputPath}"`,
+  { stdio: "inherit" }
+);
 }
 
 // --- main route ---
