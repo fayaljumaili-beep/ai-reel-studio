@@ -4,15 +4,12 @@
     
     <h1>AI Reel Studio</h1>
 
-    <input id="prompt" placeholder="Enter prompt" style="width:300px; padding:10px;" />
-    
-    <br><br>
+    <input id="prompt" />
+<button id="generateBtn" onclick="generate()">Generate</button>
 
-    <button id="generateBtn" onclick="generate()">Generate</button>
+<p id="status"></p>
 
-    <p id="status"></p>
-
-    <video id="video" width="300" controls></video>
+<video id="video" controls width="300"></video>
 
     <script src="index.js"></script>
   </body>

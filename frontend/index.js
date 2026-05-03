@@ -8,23 +8,25 @@ async function generate() {
   status.innerText = "Generating...";
 
   try {
-    const res = await fetch(
-      "https://ai-reel-studio-production.up.railway.app/generate-video",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prompt }),
-      }
-    );
+    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ prompt })
+    });
 
     const data = await res.json();
+
     console.log("DATA:", data);
 
-    // 🔥 KEY FIX
-    video.src = data.videoUrl;
+    if (!data.videoUrl) {
+      throw new Error("No video URL returned");
+    }
 
+    const ts = Date.now();
+
+    video.src = `https://ai-reel-studio-production.up.railway.app${data.videoUrl}?t=${ts}`;
     video.load();
 
     video.onloadeddata = () => {
@@ -35,7 +37,7 @@ async function generate() {
 
   } catch (err) {
     console.error(err);
-    status.innerText = "Error generating video ❌";
+    status.innerText = "Error ❌";
     btn.disabled = false;
   }
 }
