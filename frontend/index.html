@@ -2,58 +2,97 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Reel Studio</title>
 
   <style>
     body {
+      margin: 0;
       background: #000;
       color: #fff;
-      font-family: Arial;
-      text-align: center;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       padding: 20px;
     }
 
     h1 {
-      font-size: 28px;
       margin-bottom: 20px;
+      font-size: 28px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
     }
 
     input {
-      width: 80%;
+      width: 100%;
       padding: 12px;
       border-radius: 10px;
       border: none;
       margin-bottom: 10px;
+      font-size: 14px;
     }
 
     button {
-      padding: 12px 20px;
+      width: 100%;
+      padding: 12px;
       border: none;
       border-radius: 10px;
-      background: linear-gradient(45deg, pink, purple);
+      background: linear-gradient(45deg, #ff4dff, #6a00ff);
       color: white;
       font-weight: bold;
       cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    .video-container {
+      position: relative;
+      margin-top: 20px;
     }
 
     video {
-      width: 300px;
+      width: 100%;
       border-radius: 15px;
-      margin-top: 20px;
     }
 
     #captions {
-      margin-top: 20px;
-      font-size: 16px;
-      line-height: 1.6;
-      max-width: 300px;
-      margin-left: auto;
-      margin-right: auto;
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      padding: 0 10px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      line-height: 1.5;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
+
+    .word {
+      opacity: 0.5;
+      margin-right: 4px;
     }
 
     .word.active {
+      opacity: 1;
       color: #ff4dff;
-      font-weight: bold;
+    }
+
+    audio {
+      display: none;
     }
   </style>
 </head>
@@ -62,22 +101,20 @@
 
   <h1>AI Reel Studio</h1>
 
-  <input id="prompt" placeholder="Enter your idea..." />
-  <br />
-  <button onclick="generate()">Generate</button>
+  <div class="container">
+    <input id="prompt" placeholder="Enter your idea..." />
+    <button id="generateBtn" onclick="generate()">Generate</button>
+    <p id="status"></p>
 
-  <p id="status"></p>
+    <div class="video-container">
+      <video id="video" playsinline></video>
+      <div id="captions"></div>
+    </div>
 
-  <!-- 🎬 VIDEO -->
-  <video id="video" controls></video>
+    <audio id="audio"></audio>
+  </div>
 
-  <!-- 🔊 AUDIO -->
-  <audio id="audio"></audio>
-
-  <!-- 📝 CAPTIONS -->
-  <div id="captions"></div>
-
-  <!-- JS -->
+  <!-- FRONTEND LOGIC -->
   <script src="index.js"></script>
 
 </body>
