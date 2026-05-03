@@ -1,70 +1,51 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 
-// ✅ MIDDLEWARE
+// ✅ Middleware
+app.use(cors());
 app.use(express.json());
 
-// 🔥 FIX CORS (this solves your current error)
-app.use(cors({
-  origin: "*", // allow all (safe for now)
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
-
-// ✅ SERVE STATIC FILES
+// ✅ Serve static files from /public
 app.use(express.static(path.join(__dirname, "public")));
 
-// 🔍 HEALTH CHECK (optional but useful)
-app.get("/", (req, res) => {
-  res.send("🚀 AI Reel Studio backend is running");
-});
-
-// 🎬 GENERATE VIDEO ENDPOINT
-app.post("/generate-video", async (req, res) => {
+// 🚀 MAIN ROUTE
+app.get("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
+    // ✅ Correct file paths
+    const videoPath = path.join(__dirname, "public", "output.mp4");
+    const audioPath = path.join(__dirname, "public", "audio.mp3");
 
-    console.log("🧠 Prompt:", prompt);
+    console.log("📦 Checking files...");
+    console.log("Video path:", videoPath);
+    console.log("Audio path:", audioPath);
 
-    // 🔥 TEMP SCRIPT (replace later with OpenAI)
-    const script = `Here's the truth about ${prompt}. It doesn't happen overnight. Every successful person you admire started with nothing but consistency. Stay focused, stay disciplined, and keep going.`;
-
-    // 📁 FILE PATHS
-    const videoPath = path.join(__dirname, "public/output.mp4");
-    const audioPath = path.join(__dirname, "public/audio.mp3");
-
-    // ❌ SAFETY CHECK
+    // ❌ If files missing → return error
     if (!fs.existsSync(videoPath)) {
       console.error("❌ Missing output.mp4");
-      return res.status(500).json({ error: "Video file missing" });
+      return res.status(500).json({ error: "Missing output.mp4" });
     }
 
     if (!fs.existsSync(audioPath)) {
       console.error("❌ Missing audio.mp3");
-      return res.status(500).json({ error: "Audio file missing" });
+      return res.status(500).json({ error: "Missing audio.mp3" });
     }
 
-    // 🌐 BUILD FULL URLS
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-
+    // ✅ Build URLs
     const videoUrl = `${baseUrl}/output.mp4`;
     const audioUrl = `${baseUrl}/audio.mp3`;
 
     console.log("✅ Sending response");
 
-    // 🚀 RESPONSE
     res.json({
-      script,
+      script: "Generated script placeholder",
       video: videoUrl,
-      audio: audioUrl
+      audio: audioUrl,
     });
 
   } catch (err) {
@@ -73,7 +54,7 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// 🚀 START SERVER
+// ✅ Start server
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
