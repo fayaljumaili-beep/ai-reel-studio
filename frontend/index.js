@@ -61,23 +61,41 @@ function showCaptions(text) {
 
   const words = text.split(" ");
 
-  words.forEach((word) => {
+  let currentLine = document.createElement("div");
+  currentLine.className = "line";
+  captions.appendChild(currentLine);
+
+  const spans = [];
+
+  words.forEach((word, index) => {
     const span = document.createElement("span");
     span.className = "word";
-    span.innerText = word + " "; // 🔥 THIS FIXES YOUR SPACING
-    captions.appendChild(span);
-  });
+    span.innerText = word;
+    currentLine.appendChild(span);
+    spans.push(span);
 
-  const spans = document.querySelectorAll(".word");
+    // 🔥 break line every 6 words (TikTok style)
+    if ((index + 1) % 6 === 0) {
+      currentLine = document.createElement("div");
+      currentLine.className = "line";
+      captions.appendChild(currentLine);
+    }
+  });
 
   let i = 0;
 
   const interval = setInterval(() => {
     if (i < spans.length) {
       spans[i].classList.add("active");
+
+      // 🔥 auto scroll effect (only show recent lines)
+      if (i > 6) {
+        spans[i - 6].classList.remove("active");
+      }
+
       i++;
     } else {
       clearInterval(interval);
     }
-  }, 350);
+  }, 300);
 }

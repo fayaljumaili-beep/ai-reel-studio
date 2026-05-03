@@ -70,26 +70,37 @@
     }
 
     #captions {
-      position: absolute;
-      bottom: 20px;
-      width: 100%;
-      padding: 0 10px;
-      text-align: center;
-      font-size: 18px;
-      font-weight: bold;
-      line-height: 1.5;
-      text-shadow: 0 0 10px rgba(0,0,0,0.8);
-    }
+  position: absolute;
+  bottom: 80px;
+  width: 100%;
+  padding: 0 20px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1.4;
+}
 
-    .word {
-      opacity: 0.5;
-      margin-right: 4px;
-    }
+.line {
+  display: block;
+  margin-bottom: 10px;
+}
 
-    .word.active {
-      opacity: 1;
-      color: #ff4dff;
-    }
+.word {
+  opacity: 0.3;
+  margin-right: 6px;
+  transition: all 0.2s ease;
+}
+
+.word.active {
+  color: #ff4dff;
+  text-shadow: 0 0 10px #ff4dff;
+}
+
+.word.active {
+  opacity: 1;
+  color: #ff4dff;
+  transform: scale(1.1);
+}
 
     audio {
       display: none;
