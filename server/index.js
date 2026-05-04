@@ -15,6 +15,7 @@ app.use(cors({
 
 app.options("*", cors());
 app.use(express.json());
+app.use("/videos", express.static("."));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -119,7 +120,7 @@ app.post("/generate-video", async (req, res) => {
     console.log("✅ VIDEO READY");
 
     res.json({
-      video: "final.mp4",
+     video: `${req.protocol}://${req.get("host")}/videos/final.mp4`,
       script
     });
 
