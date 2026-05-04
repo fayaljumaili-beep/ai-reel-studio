@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>App</title>
+</head>
+<body style="background:black;color:white;text-align:center">
+
+<h1>🔥 AI Reel Studio</h1>
+
+<input id="prompt" placeholder="Enter topic">
+<button onclick="generate()">Generate</button>
+
+<p id="status"></p>
+
+<video id="video" controls width="300"></video>
+
+<p id="caption"></p>
+
+<script>
+async function generate() {
+  const prompt = document.getElementById("prompt").value;
+  const status = document.getElementById("status");
+  const video = document.getElementById("video");
+  const caption = document.getElementById("caption");
+
+  status.innerText = "Generating...";
+
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+
+  try {
+    const res = await fetch("https://YOUR-RAILWAY-URL/generate-video", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    video.src = data.videoUrl;
+    video.load();
+
+    caption.innerText = data.caption;
+
+    status.innerText = "Done 🚀";
+
+  } catch {
+    status.innerText = "Error ❌";
+  }
+}
+</script>
+
+</body>
+</html>

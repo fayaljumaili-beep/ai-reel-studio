@@ -1,57 +1,126 @@
-const express = require("express");
-const cors = require("cors");
-const { exec } = require("child_process");
-const fs = require("fs");
-const path = require("path");
-const sharp = require("sharp");
+import express from "express";
+import multer from "multer";
+import fs from "fs";
+import axios from "axios";
+import { exec } from "child_process";
+import OpenAI from "openai";
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+const upload = multer({ dest: "uploads/" });
 
-app.post("/generate-video", async (req, res) => {
-  try {
-    const text = (req.body.prompt || "SUCCESS").toUpperCase();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
-    const imagePath = path.join(__dirname, "public", "input.jpg");
-    const resizedPath = path.join(__dirname, "public", "resized.jpg");
-    const outputPath = path.join(__dirname, "public", "output.mp4");
-    const musicPath = path.join(__dirname, "public", "music.mp3");
+function execPromise(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) reject(stderr);
+      else resolve(stdout);
+    });
+  });
+}
 
-    if (!fs.existsSync(imagePath)) {
-      return res.status(500).json({ error: "input.jpg missing" });
-    }
-
-    // 🔥 Resize image (prevents crashes)
-    await sharp(imagePath)
-      .resize(720, 1280, { fit: "inside" })
-      .toFile(resizedPath);
-
-    // 🔥 Escape text for ffmpeg
-    const safeText = text.replace(/:/g, "\\:").replace(/'/g, "\\'");
-
-    // 🎬 TikTok-style video
-    const cmd = `ffmpeg -y -loop 1 -i "${resizedPath}" -i "${musicPath}" -vf "scale=720:1280:force_original_aspect_ratio=decrease,drawtext=text='${safeText}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=h-200:shadowcolor=black:shadowx=2:shadowy=2" -c:v libx264 -preset ultrafast -t 5 -pix_fmt yuv420p -shortest "${outputPath}"`;
-
-    exec(cmd, (error, stdout, stderr) => {
-      console.log(stderr);
-
-      if (error) {
-        console.error("FFmpeg error:", error);
-        return res.status(500).json({ error: "Video generation failed" });
+// 🧠 AI content
+async function generateContent(prompt) {
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: "You create viral TikTok hooks and captions."
+      },
+      {
+        role: "user",
+        content: `Topic: ${prompt}
+Return:
+Hook:
+Caption:
+Script:`
       }
+    ]
+  });
 
-      return res.json({
-        videoUrl: `${req.protocol}://${req.get("host")}/output.mp4`,
-      });
+  return res.choices[0].message.content;
+}
+
+// 🎬 Pexels video
+async function getPexelsVideo(query) {
+  const res = await axios.get(
+    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
+    {
+      headers: {
+        Authorization: process.env.PEXELS_API_KEY
+      }
+    }
+  );
+
+  return res.data.videos[0].video_files[0].link;
+}
+
+// 🔊 ElevenLabs
+async function generateVoice(text) {
+  const res = await axios.post(
+    "https://api.elevenlabs.io/v1/text-to-speech/uIZsnBL0YK1S5j69bAih",
+    { text },
+    {
+      headers: {
+        "xi-api-key": process.env.ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+      },
+      responseType: "arraybuffer"
+    }
+  );
+
+  const path = `voice-${Date.now()}.mp3`;
+  fs.writeFileSync(path, res.data);
+  return path;
+}
+
+// 🚀 MAIN ROUTE
+app.post("/generate-video", upload.none(), async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const ai = await generateContent(prompt);
+
+    const videoUrl = await getPexelsVideo(prompt);
+
+    const videoPath = `video-${Date.now()}.mp4`;
+
+    const response = await axios({
+      url: videoUrl,
+      method: "GET",
+      responseType: "stream"
+    });
+
+    const writer = fs.createWriteStream(videoPath);
+    response.data.pipe(writer);
+
+    await new Promise(resolve => writer.on("finish", resolve));
+
+    const voicePath = await generateVoice(ai);
+
+    const output = `output-${Date.now()}.mp4`;
+
+    await execPromise(`
+      ffmpeg -y -i ${videoPath} -i ${voicePath} \
+      -vf "scale=720:1280" \
+      -shortest -preset ultrafast ${output}
+    `);
+
+    res.json({
+      videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
+      caption: ai
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "fail" });
   }
 });
 
+app.use(express.static("."));
+
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(PORT, () => console.log("Server running"));
