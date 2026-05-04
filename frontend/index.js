@@ -5,7 +5,7 @@ async function generate() {
   const emotion = document.getElementById("emotion").value;
   const duration = document.getElementById("duration").value;
 
-  const res = await fetch("https://your-backend-url/generate-video", {
+  const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
