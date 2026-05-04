@@ -3,85 +3,108 @@
 <head>
   <title>AI Reel Studio</title>
 
+  <h1 style="
+  position:fixed;
+  top:50px;
+  width:100%;
+  text-align:center;
+  font-size:18px;
+  letter-spacing:2px;
+  opacity:0.8;
+">
+  🔥 AI REEL STUDIO
+</h1>
+
   <style>
     body {
-      margin: 0;
-      background: #000;
-      font-family: -apple-system, sans-serif;
-      color: white;
-      overflow: hidden;
-    }
+  margin: 0;
+  background: black;
+  font-family: -apple-system, sans-serif;
+  color: white;
+  overflow: hidden;
+}
 
-    #controls {
-      position: fixed;
-      top: 10px;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      z-index: 10;
-    }
+#controls {
+  position: fixed;
+  top: 12px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 10;
+}
 
-    input {
-      padding: 12px;
-      border-radius: 20px;
-      border: none;
-      width: 220px;
-      background: #111;
-      color: white;
-    }
+input {
+  padding: 14px;
+  border-radius: 999px;
+  border: none;
+  width: 240px;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  backdrop-filter: blur(10px);
+}
 
-    button {
-      padding: 12px 18px;
-      border-radius: 20px;
-      border: none;
-      background: white;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-    }
+button {
+  padding: 14px 20px;
+  border-radius: 999px;
+  border: none;
+  background: white;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+}
 
-    #feed {
-      height: 100vh;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-    }
+#feed {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+}
 
-    .video-card {
-      height: 100vh;
-      position: relative;
-      scroll-snap-align: start;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
+.video-card {
+  height: 100vh;
+  position: relative;
+  scroll-snap-align: start;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
-    video {
-      height: 100%;
-      object-fit: cover;
-    }
+video {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
 
-    .caption {
-      position: absolute;
-      bottom: 100px;
-      left: 16px;
-      right: 16px;
-      font-size: 14px;
-      background: linear-gradient(transparent, rgba(0,0,0,0.8));
-      padding: 20px;
-      border-radius: 10px;
-    }
+.caption {
+  position: absolute;
+  bottom: 120px;
+  left: 16px;
+  right: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  background: linear-gradient(transparent, rgba(0,0,0,0.9));
+  padding: 20px;
+  border-radius: 12px;
+}
 
-    .download {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      background: white;
-      color: black;
-      padding: 10px;
-      border-radius: 50%;
-      text-decoration: none;
-    }
+.download {
+  position: absolute;
+  bottom: 30px;
+  right: 20px;
+  background: white;
+  color: black;
+  padding: 12px;
+  border-radius: 50%;
+  text-decoration: none;
+  font-size: 18px;
+}
+
+.loading {
+  text-align: center;
+  margin-top: 40vh;
+  font-size: 18px;
+  opacity: 0.7;
+}
   </style>
 </head>
 
