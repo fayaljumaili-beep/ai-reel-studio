@@ -109,21 +109,16 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    console.log("Prompt:", prompt);
-
-    // 🔥 generate 3 variations
-    const variations = await Promise.all([
-      generateContent(prompt),
-      generateContent(prompt),
-      generateContent(prompt)
-    ]);
-
     const results = [];
 
-    for (let ai of variations) {
-      const videoUrl = await getPexelsVideo(prompt);
+    // 🔥 LOOP = REAL PRODUCT
+    for (let i = 0; i < 3; i++) {
+      const variationPrompt = `${prompt} variation ${i + 1}`;
 
-      const videoPath = `video-${Date.now()}.mp4`;
+      const ai = await generateContent(variationPrompt);
+      const videoUrl = await getPexelsVideo(variationPrompt);
+
+      const videoPath = `video-${Date.now()}-${i}.mp4`;
 
       const response = await axios({
         url: videoUrl,
@@ -138,18 +133,11 @@ app.post("/generate-video", async (req, res) => {
 
       const voicePath = await generateVoice(ai.script);
 
-      const output = `output-${Date.now()}.mp4`;
+      const output = `output-${Date.now()}-${i}.mp4`;
 
-      // 🔥 SAFE HOOK (prevents ffmpeg crash)
-      const safeHook = ai.hook
-        .replace(/['"]/g, "")
-        .replace(/:/g, "")
-        .slice(0, 60);
-
-      // 🎬 ADD OVERLAY TEXT
       await execPromise(`
         ffmpeg -y -i ${videoPath} -i ${voicePath} \
-        -vf "scale=540:960,drawtext=text='${safeHook}':fontsize=28:fontcolor=white:x=(w-text_w)/2:y=100" \
+        -vf "scale=540:960" \
         -c:v libx264 -preset ultrafast -crf 32 \
         -shortest ${output}
       `);
@@ -158,13 +146,9 @@ app.post("/generate-video", async (req, res) => {
         videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
         caption: ai.full
       });
-
-      // 🧹 cleanup
-      fs.unlinkSync(videoPath);
-      fs.unlinkSync(voicePath);
     }
 
-    res.json({ videos: results });
+    res.json({ results });
 
   } catch (err) {
     console.error("ERROR:", err);
