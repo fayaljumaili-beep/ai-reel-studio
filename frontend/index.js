@@ -13,8 +13,10 @@ async function generate() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      prompt: fullPrompt,
-    }),
+  prompt: fullPrompt,
+  tone: selectedTone,
+  length: 30
+})
   });
 
   const data = await res.json();
