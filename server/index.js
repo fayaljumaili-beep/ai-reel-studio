@@ -6,7 +6,6 @@ import OpenAI from "openai";
 import cors from "cors";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
@@ -14,48 +13,50 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// helper
 function execPromise(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
-      if (err) {
-        console.error(stderr);
-        reject(stderr);
-      } else resolve(stdout);
+      if (err) reject(stderr);
+      else resolve(stdout);
     });
   });
 }
 
-// AI content
-async function generateContent(prompt) {
+// 🎯 smarter AI generation
+async function generateContent({ prompt, scenario, theme }) {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
-        content: "You create viral TikTok hooks and captions."
+        content: "You create viral TikTok style short-form video scripts."
       },
       {
         role: "user",
-        content: `Topic: ${prompt}
+        content: `
+Topic: ${prompt}
+Scenario: ${scenario}
+Theme: ${theme}
+
 Return STRICTLY:
 Hook:
 Caption:
-Script:`
+Script:
+`
       }
     ]
   });
 
   const text = res.choices[0].message.content;
 
-  const hook = text.match(/Hook:(.*)/)?.[1]?.trim() || prompt;
-  const caption = text.match(/Caption:(.*)/)?.[1]?.trim() || "";
-  const script = text.match(/Script:(.*)/s)?.[1]?.trim() || prompt;
-
-  return { hook, caption, script, full: text };
+  return {
+    hook: text.match(/Hook:(.*)/)?.[1]?.trim(),
+    caption: text.match(/Caption:(.*)/)?.[1]?.trim(),
+    script: text.match(/Script:(.*)/s)?.[1]?.trim()
+  };
 }
 
-// Pexels
+// 🎥 better randomization
 async function getVideo(query) {
   const res = await axios.get(
     `https://api.pexels.com/videos/search?query=${query}&per_page=10`,
@@ -66,14 +67,22 @@ async function getVideo(query) {
 
   const vids = res.data.videos;
   const random = vids[Math.floor(Math.random() * vids.length)];
-
   return random.video_files[0].link;
 }
 
-// voice
-async function generateVoice(text) {
+// 🔊 voice selector
+function getVoiceId(voice) {
+  const voices = {
+    male: "uIZsnBL0YK1S5j69bAih",
+    female: "EXAVITQu4vr4xnSDxMaL",
+    deep: "TxGEqnHWrfWFTfGW9XjX"
+  };
+  return voices[voice] || voices.male;
+}
+
+async function generateVoice(text, voice) {
   const res = await axios.post(
-    "https://api.elevenlabs.io/v1/text-to-speech/uIZsnBL0YK1S5j69bAih",
+    `https://api.elevenlabs.io/v1/text-to-speech/${getVoiceId(voice)}`,
     { text },
     {
       headers: {
@@ -89,16 +98,15 @@ async function generateVoice(text) {
   return file;
 }
 
-// MAIN
+// 🚀 MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+    const { prompt, scenario, theme, voice } = req.body;
 
     const results = [];
 
     for (let i = 0; i < 3; i++) {
-      const ai = await generateContent(prompt + " " + i);
+      const ai = await generateContent({ prompt, scenario, theme });
 
       const videoUrl = await getVideo(prompt);
       const videoPath = `video-${Date.now()}-${i}.mp4`;
@@ -111,16 +119,15 @@ app.post("/generate-video", async (req, res) => {
 
       const writer = fs.createWriteStream(videoPath);
       videoRes.data.pipe(writer);
+      await new Promise(r => writer.on("finish", r));
 
-      await new Promise(resolve => writer.on("finish", resolve));
-
-      const voicePath = await generateVoice(ai.script);
+      const voicePath = await generateVoice(ai.script, voice);
 
       const output = `output-${Date.now()}-${i}.mp4`;
 
       await execPromise(`
         ffmpeg -y -i ${videoPath} -i ${voicePath} \
-        -c:v libx264 -preset ultrafast -crf 32 \
+        -c:v libx264 -preset ultrafast -crf 30 \
         -shortest ${output}
       `);
 
@@ -140,7 +147,4 @@ app.post("/generate-video", async (req, res) => {
 });
 
 app.use(express.static("."));
-
-app.listen(process.env.PORT || 8080, () =>
-  console.log("Server running")
-);
+app.listen(process.env.PORT || 8080);

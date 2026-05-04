@@ -2,18 +2,21 @@ const API = "https://ai-reel-studio-production.up.railway.app";
 
 async function generate() {
   const prompt = document.getElementById("prompt").value;
+  const scenario = document.getElementById("scenario").value;
+  const theme = document.getElementById("theme").value;
+  const voice = document.getElementById("voice").value;
+
   const feed = document.getElementById("feed");
 
-  feed.innerHTML = "<p style='text-align:center'>Generating...</p>";
+  feed.innerHTML = "Generating...";
 
   const res = await fetch(`${API}/generate-video`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt })
+    body: JSON.stringify({ prompt, scenario, theme, voice })
   });
 
   const data = await res.json();
-
   feed.innerHTML = "";
 
   data.results.forEach(item => {
@@ -23,8 +26,6 @@ async function generate() {
     const vid = document.createElement("video");
     vid.src = item.videoUrl;
     vid.controls = true;
-    vid.autoplay = true;
-    vid.loop = true;
 
     const hook = document.createElement("div");
     hook.className = "hook";
@@ -34,19 +35,12 @@ async function generate() {
     meta.className = "meta";
     meta.innerText = item.caption;
 
-    const download = document.createElement("a");
-    download.href = item.videoUrl;
-    download.innerText = "⬇";
-    download.className = "download";
-
     card.appendChild(vid);
     card.appendChild(hook);
     card.appendChild(meta);
-    card.appendChild(download);
 
     feed.appendChild(card);
   });
 }
 
-// IMPORTANT FIX
 window.generate = generate;
