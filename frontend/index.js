@@ -7,7 +7,7 @@ async function generate() {
 
   const fullPrompt = `${prompt} in a ${scenario} style with ${tone} tone`;
 
-  const res = await fetch(API, {
+  const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
