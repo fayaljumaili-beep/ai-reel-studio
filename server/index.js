@@ -8,8 +8,12 @@ import OpenAI from "openai";
 const app = express();
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST"]
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
 }));
+
+// 👇 ADD THIS (VERY IMPORTANT)
+app.options("*", cors());
 app.use(express.json());
 
 const openai = new OpenAI({
