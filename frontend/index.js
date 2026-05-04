@@ -18,13 +18,19 @@ async function generate() {
 
   feed.innerHTML = "";
 
-  data.videos.forEach(video => {
+  // 🔥 HANDLE BOTH CASES (single OR multiple)
+  const videos = data.videos || [data];
+
+  videos.forEach(video => {
     const card = document.createElement("div");
     card.className = "video-card";
 
     const vid = document.createElement("video");
     vid.src = video.videoUrl;
-    vid.controls = true;
+    vid.autoplay = true;
+    vid.loop = true;
+    vid.muted = false;
+    vid.playsInline = true;
 
     const caption = document.createElement("div");
     caption.className = "caption";
@@ -33,7 +39,7 @@ async function generate() {
     const download = document.createElement("a");
     download.className = "download";
     download.href = video.videoUrl;
-    download.innerText = "Download";
+    download.innerText = "⬇";
     download.download = "";
 
     card.appendChild(vid);
@@ -42,4 +48,4 @@ async function generate() {
 
     feed.appendChild(card);
   });
-}
+}}
