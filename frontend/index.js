@@ -1,46 +1,62 @@
-const API = "https://ai-reel-studio-production.up.railway.app";
-
 async function generate() {
   const prompt = document.getElementById("prompt").value;
-  const scenario = document.getElementById("scenario").value;
   const theme = document.getElementById("theme").value;
-  const voice = document.getElementById("voice").value;
+  const scenario = document.getElementById("scenario").value;
+  const emotion = document.getElementById("emotion").value;
+  const duration = document.getElementById("duration").value;
 
-  const feed = document.getElementById("feed");
-
-  feed.innerHTML = "Generating...";
-
-  const res = await fetch(`${API}/generate-video`, {
+  const res = await fetch("https://your-backend-url/generate-video", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, scenario, theme, voice })
+    body: JSON.stringify({
+      prompt,
+      theme,
+      scenario,
+      emotion,
+      duration
+    })
   });
 
   const data = await res.json();
+
+  const feed = document.getElementById("feed");
   feed.innerHTML = "";
 
-  data.results.forEach(item => {
+  data.videos.forEach(v => {
     const card = document.createElement("div");
     card.className = "video-card";
 
     const vid = document.createElement("video");
-    vid.src = item.videoUrl;
-    vid.controls = true;
+    vid.src = v.videoUrl;
+    vid.loop = true;
+    vid.muted = true;
+    vid.autoplay = true;
 
-    const hook = document.createElement("div");
-    hook.className = "hook";
-    hook.innerText = item.hook;
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
 
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.innerText = item.caption;
+    overlay.innerHTML = `
+      <div class="hook">${v.hook || ""}</div>
+      <div class="caption">${v.caption || ""}</div>
+    `;
 
     card.appendChild(vid);
-    card.appendChild(hook);
-    card.appendChild(meta);
-
+    card.appendChild(overlay);
     feed.appendChild(card);
   });
-}
 
-window.generate = generate;
+  // 🎯 AUTO PLAY ONLY ACTIVE VIDEO
+  const videos = document.querySelectorAll("video");
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.play();
+      } else {
+        entry.target.pause();
+      }
+    });
+  }, { threshold: 0.6 });
+
+  videos.forEach(v => observer.observe(v));
+}

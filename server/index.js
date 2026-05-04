@@ -1,44 +1,81 @@
 import express from "express";
-import axios from "axios";
-import fs from "fs";
-import { exec } from "child_process";
-import OpenAI from "openai";
 import cors from "cors";
+import fetch from "node-fetch";
+import OpenAI from "openai";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+/* =========================
+   ENV CONFIG
+========================= */
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-function execPromise(cmd) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (err, stdout, stderr) => {
-      if (err) reject(stderr);
-      else resolve(stdout);
-    });
-  });
+const PEXELS_KEY = process.env.PEXELS_API_KEY;
+
+/* =========================
+   VIDEO FETCH
+========================= */
+async function getVideo(query) {
+  try {
+    const res = await fetch(
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=10`,
+      {
+        headers: { Authorization: PEXELS_KEY }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!data.videos || data.videos.length === 0) {
+      return null;
+    }
+
+    const video =
+      data.videos[Math.floor(Math.random() * data.videos.length)];
+
+    return video.video_files?.[0]?.link || null;
+
+  } catch (err) {
+    console.error("Pexels error:", err);
+    return null;
+  }
 }
 
-// 🎯 smarter AI generation
-async function generateContent({ prompt, scenario, theme }) {
+/* =========================
+   AI SCRIPT (FIXED + MATCHING VISUALS)
+========================= */
+async function generateContent({ prompt, scenario, theme, emotion, duration }) {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
-        content: "You create viral TikTok style short-form video scripts."
+        content:
+          "You create viral TikTok scripts that MUST match generic stock footage (no specific actions like 'walking dog in park'). Keep it broad and relatable."
       },
       {
         role: "user",
         content: `
 Topic: ${prompt}
-Scenario: ${scenario}
 Theme: ${theme}
+Scenario: ${scenario}
+Emotion: ${emotion}
+Length: ${duration}
 
-Return STRICTLY:
+Write a HIGH-RETENTION script.
+
+RULES:
+- Must match ANY stock video
+- No specific scene mismatches
+- Hook must grab attention instantly
+- Script should feel continuous (20–60 sec)
+
+Return EXACT format:
+
 Hook:
 Caption:
 Script:
@@ -50,101 +87,61 @@ Script:
   const text = res.choices[0].message.content;
 
   return {
-    hook: text.match(/Hook:(.*)/)?.[1]?.trim(),
-    caption: text.match(/Caption:(.*)/)?.[1]?.trim(),
-    script: text.match(/Script:(.*)/s)?.[1]?.trim()
+    hook: text.match(/Hook:(.*)/)?.[1]?.trim() || "",
+    caption: text.match(/Caption:(.*)/)?.[1]?.trim() || "",
+    script: text.match(/Script:(.*)/s)?.[1]?.trim() || ""
   };
 }
 
-// 🎥 better randomization
-async function getVideo(query) {
-  const res = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=10`,
-    {
-      headers: { Authorization: process.env.PEXELS_API_KEY }
-    }
-  );
-
-  const vids = res.data.videos;
-  const random = vids[Math.floor(Math.random() * vids.length)];
-  return random.video_files[0].link;
-}
-
-// 🔊 voice selector
-function getVoiceId(voice) {
-  const voices = {
-    male: "uIZsnBL0YK1S5j69bAih",
-    female: "EXAVITQu4vr4xnSDxMaL",
-    deep: "TxGEqnHWrfWFTfGW9XjX"
-  };
-  return voices[voice] || voices.male;
-}
-
-async function generateVoice(text, voice) {
-  const res = await axios.post(
-    `https://api.elevenlabs.io/v1/text-to-speech/${getVoiceId(voice)}`,
-    { text },
-    {
-      headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      responseType: "arraybuffer"
-    }
-  );
-
-  const file = `voice-${Date.now()}.mp3`;
-  fs.writeFileSync(file, res.data);
-  return file;
-}
-
-// 🚀 MAIN ROUTE
+/* =========================
+   MAIN ROUTE
+========================= */
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, scenario, theme, voice } = req.body;
+    const {
+      prompt,
+      scenario,
+      theme,
+      emotion,
+      duration
+    } = req.body;
 
-    const results = [];
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
+
+    const videos = [];
 
     for (let i = 0; i < 3; i++) {
-      const ai = await generateContent({ prompt, scenario, theme });
+      const videoUrl = await getVideo(`${theme} ${scenario}`);
 
-      const videoUrl = await getVideo(prompt);
-      const videoPath = `video-${Date.now()}-${i}.mp4`;
-
-      const videoRes = await axios({
-        url: videoUrl,
-        method: "GET",
-        responseType: "stream"
+      const content = await generateContent({
+        prompt,
+        scenario,
+        theme,
+        emotion,
+        duration
       });
 
-      const writer = fs.createWriteStream(videoPath);
-      videoRes.data.pipe(writer);
-      await new Promise(r => writer.on("finish", r));
-
-      const voicePath = await generateVoice(ai.script, voice);
-
-      const output = `output-${Date.now()}-${i}.mp4`;
-
-      await execPromise(`
-        ffmpeg -y -i ${videoPath} -i ${voicePath} \
-        -c:v libx264 -preset ultrafast -crf 30 \
-        -shortest ${output}
-      `);
-
-      results.push({
-        videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
-        hook: ai.hook,
-        caption: ai.caption
+      videos.push({
+        videoUrl,
+        ...content
       });
     }
 
-    res.json({ results });
+    res.json({ videos });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "failed" });
+    console.error("SERVER ERROR:", err);
+    res.status(500).json({ error: "Failed to generate" });
   }
 });
 
-app.use(express.static("."));
-app.listen(process.env.PORT || 8080);
+/* =========================
+   START SERVER
+========================= */
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
+});
