@@ -115,19 +115,20 @@ app.post("/generate-video", async (req, res) => {
 
     // stitch
     await execPromise(`
-      ffmpeg -f concat -safe 0 -i videos.txt \
-      -c:v libx264 -preset fast -pix_fmt yuv420p stitched.mp4
-    `);
+  ffmpeg -f concat -safe 0 -i videos.txt \
+  -c copy stitched.mp4
+`);
 
     console.log("🔁 extending duration...");
 
     // loop to ~30 sec (safe for Railway)
     await execPromise(`
-      ffmpeg -stream_loop 2 -i stitched.mp4 \
-      -t 30 -c copy final.mp4
-    `);
+  ffmpeg -stream_loop 1 -i stitched.mp4 \
+  -t 25 -c copy final.mp4
+`);
 
     console.log("🚀 SENDING RESPONSE");
+    console.log("✅ FINAL VIDEO READY");
 
     // IMPORTANT: return public URL (not local file path)
     const videoUrl = `${req.protocol}://${req.get("host")}/final.mp4`;
