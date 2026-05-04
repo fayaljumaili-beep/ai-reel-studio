@@ -9,15 +9,14 @@ import cors from "cors";
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
-// ✅ CRITICAL FIX
 app.use(cors());
-app.use(express.json()); // 🔥 THIS FIXES YOUR ERROR
+app.use(express.json());
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// 🧠 safer exec
+// 🔧 safer exec
 function execPromise(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
@@ -29,39 +28,46 @@ function execPromise(cmd) {
   });
 }
 
-// 🧠 AI content
+// 🧠 UPGRADED AI (hook + script)
 async function generateContent(prompt) {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
-        content: "You create viral TikTok hooks and captions."
+        content: "You are a viral TikTok content expert."
       },
       {
         role: "user",
-        content: `Topic: ${prompt}
-Return STRICTLY:
+        content: `
+Topic: ${prompt}
+
+Create ONE viral short-form video idea.
+
+Return EXACTLY:
+
 Hook:
+Main:
+CTA:
 Caption:
-Script:`
+`
       }
     ]
   });
 
   const text = res.choices[0].message.content;
 
-  // 🔥 extract script for voice
-  const scriptMatch = text.match(/Script:(.*)/s);
-  const script = scriptMatch ? scriptMatch[1].trim() : prompt;
+  const hook = text.match(/Hook:(.*)/)?.[1]?.trim() || "";
+  const main = text.match(/Main:(.*)/)?.[1]?.trim() || "";
 
   return {
     full: text,
-    script
+    hook,
+    script: `${hook}. ${main}`
   };
 }
 
-// 🎬 Pexels video
+// 🎬 Pexels
 async function getPexelsVideo(query) {
   const res = await axios.get(
     `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
@@ -94,51 +100,71 @@ async function generateVoice(text) {
   return path;
 }
 
-// 🚀 MAIN ROUTE
+// 🚀 MAIN ROUTE (MULTI VARIATION)
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // ❌ prevent crash
     if (!prompt) {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
     console.log("Prompt:", prompt);
 
-    const ai = await generateContent(prompt);
+    // 🔥 generate 3 variations
+    const variations = await Promise.all([
+      generateContent(prompt),
+      generateContent(prompt),
+      generateContent(prompt)
+    ]);
 
-    const videoUrl = await getPexelsVideo(prompt);
+    const results = [];
 
-    const videoPath = `video-${Date.now()}.mp4`;
+    for (let ai of variations) {
+      const videoUrl = await getPexelsVideo(prompt);
 
-    const response = await axios({
-      url: videoUrl,
-      method: "GET",
-      responseType: "stream"
-    });
+      const videoPath = `video-${Date.now()}.mp4`;
 
-    const writer = fs.createWriteStream(videoPath);
-    response.data.pipe(writer);
+      const response = await axios({
+        url: videoUrl,
+        method: "GET",
+        responseType: "stream"
+      });
 
-    await new Promise(resolve => writer.on("finish", resolve));
+      const writer = fs.createWriteStream(videoPath);
+      response.data.pipe(writer);
 
-    const voicePath = await generateVoice(ai.script);
+      await new Promise(resolve => writer.on("finish", resolve));
 
-    const output = `output-${Date.now()}.mp4`;
+      const voicePath = await generateVoice(ai.script);
 
-    // 🔥 OPTIMIZED (prevents Railway crash)
-    await execPromise(`
-      ffmpeg -y -i ${videoPath} -i ${voicePath} \
-      -vf "scale=540:960" \
-      -c:v libx264 -preset ultrafast -crf 32 \
-      -shortest ${output}
-    `);
+      const output = `output-${Date.now()}.mp4`;
 
-    res.json({
-      videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
-      caption: ai.full
-    });
+      // 🔥 SAFE HOOK (prevents ffmpeg crash)
+      const safeHook = ai.hook
+        .replace(/['"]/g, "")
+        .replace(/:/g, "")
+        .slice(0, 60);
+
+      // 🎬 ADD OVERLAY TEXT
+      await execPromise(`
+        ffmpeg -y -i ${videoPath} -i ${voicePath} \
+        -vf "scale=540:960,drawtext=text='${safeHook}':fontsize=28:fontcolor=white:x=(w-text_w)/2:y=100" \
+        -c:v libx264 -preset ultrafast -crf 32 \
+        -shortest ${output}
+      `);
+
+      results.push({
+        videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
+        caption: ai.full
+      });
+
+      // 🧹 cleanup
+      fs.unlinkSync(videoPath);
+      fs.unlinkSync(voicePath);
+    }
+
+    res.json({ videos: results });
 
   } catch (err) {
     console.error("ERROR:", err);
