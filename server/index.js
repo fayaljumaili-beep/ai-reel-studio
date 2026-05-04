@@ -4,9 +4,12 @@ import fs from "fs";
 import axios from "axios";
 import { exec } from "child_process";
 import OpenAI from "openai";
+import cors from "cors";
 
 const app = express();
 const upload = multer({ dest: "uploads/" });
+
+app.use(cors());
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
