@@ -70,7 +70,7 @@ Caption:
 // 🎬 Pexels
 async function getPexelsVideo(query) {
   const res = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
+    `https://api.pexels.com/videos/search?query=${query}&per_page=10`,
     {
       headers: {
         Authorization: process.env.PEXELS_API_KEY
@@ -78,7 +78,14 @@ async function getPexelsVideo(query) {
     }
   );
 
-  return res.data.videos[0].video_files[0].link;
+  const videos = res.data.videos;
+
+  if (!videos.length) throw new Error("No videos found");
+
+  // 🔥 RANDOMIZE
+  const randomIndex = Math.floor(Math.random() * videos.length);
+
+  return videos[randomIndex].video_files[0].link;
 }
 
 // 🔊 ElevenLabs
@@ -137,9 +144,10 @@ app.post("/generate-video", async (req, res) => {
 
       await execPromise(`
         ffmpeg -y -i ${videoPath} -i ${voicePath} \
-        -vf "scale=540:960" \
-        -c:v libx264 -preset ultrafast -crf 32 \
-        -shortest ${output}
+-filter_complex "[0:a]volume=0.2[a0];[1:a]volume=1.5[a1];[a0][a1]amix=inputs=2:duration=shortest" \
+-vf "scale=540:960" \
+-c:v libx264 -preset ultrafast -crf 32 \
+-shortest ${output}
       `);
 
       results.push({
