@@ -2,30 +2,42 @@
 <html>
 <head>
   <title>AI Reel Studio</title>
+
   <style>
     body {
       margin: 0;
-      background: black;
-      font-family: Arial;
+      background: #000;
+      font-family: -apple-system, sans-serif;
       color: white;
       overflow: hidden;
     }
 
     #controls {
       position: fixed;
-      top: 20px;
+      top: 10px;
       width: 100%;
-      text-align: center;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
       z-index: 10;
     }
 
     input {
-      padding: 10px;
-      width: 200px;
+      padding: 12px;
+      border-radius: 20px;
+      border: none;
+      width: 220px;
+      background: #111;
+      color: white;
     }
 
     button {
-      padding: 10px;
+      padding: 12px 18px;
+      border-radius: 20px;
+      border: none;
+      background: white;
+      color: black;
+      font-weight: bold;
       cursor: pointer;
     }
 
@@ -46,14 +58,18 @@
 
     video {
       height: 100%;
+      object-fit: cover;
     }
 
     .caption {
       position: absolute;
-      bottom: 80px;
-      left: 20px;
-      right: 20px;
+      bottom: 100px;
+      left: 16px;
+      right: 16px;
       font-size: 14px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      padding: 20px;
+      border-radius: 10px;
     }
 
     .download {
@@ -62,7 +78,8 @@
       right: 20px;
       background: white;
       color: black;
-      padding: 8px;
+      padding: 10px;
+      border-radius: 50%;
       text-decoration: none;
     }
   </style>
@@ -70,13 +87,14 @@
 
 <body>
 
-<div id="controls">
-  <input id="prompt" placeholder="Enter topic..." />
-  <button onclick="generate()">Generate 3 Reels</button>
-</div>
+  <div id="controls">
+    <input id="prompt" placeholder="Enter topic..." />
+    <button onclick="generate()">Generate 3 Reels</button>
+  </div>
 
-<div id="feed"></div>
+  <div id="feed"></div>
 
-<script src="index.js"></script>
+  <script src="index.js"></script>
+
 </body>
 </html>
