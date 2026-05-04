@@ -143,12 +143,16 @@ app.post("/generate-video", async (req, res) => {
       const output = `output-${Date.now()}-${i}.mp4`;
 
       await execPromise(`
-        ffmpeg -y -i ${videoPath} -i ${voicePath} \
--filter_complex "[0:a]volume=0.2[a0];[1:a]volume=1.5[a1];[a0][a1]amix=inputs=2:duration=shortest" \
--vf "scale=540:960" \
--c:v libx264 -preset ultrafast -crf 32 \
--shortest ${output}
-      `);
+  ffmpeg -y \
+  -i ${videoPath} \
+  -i ${voicePath} \
+  -filter_complex "[1:a]volume=1.0[a1]" \
+  -map 0:v \
+  -map "[a1]" \
+  -vf "scale=540:960" \
+  -c:v libx264 -preset ultrafast -crf 32 \
+  -shortest ${output}
+`);
 
       results.push({
         videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
