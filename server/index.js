@@ -146,10 +146,12 @@ app.post("/generate-video", async (req, res) => {
   ffmpeg -y \
   -i ${videoPath} \
   -i ${voicePath} \
-  -filter_complex "[1:a]volume=1.0[a1]" \
+  -i assets/music.mp3 \
+  -filter_complex "[1:a]volume=1.0[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[aout]" \
   -map 0:v \
-  -map "[a1]" \
+  -map "[aout]" \
   -vf "scale=540:960" \
+  -t 8 \
   -c:v libx264 -preset ultrafast -crf 32 \
   -shortest ${output}
 `);
