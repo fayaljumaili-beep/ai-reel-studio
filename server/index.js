@@ -6,7 +6,10 @@ import { exec } from "child_process";
 import OpenAI from "openai";
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"]
+}));
 app.use(express.json());
 
 const openai = new OpenAI({
