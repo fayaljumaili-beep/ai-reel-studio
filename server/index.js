@@ -1,6 +1,6 @@
 import express from "express";
-import fs from "fs";
 import axios from "axios";
+import fs from "fs";
 import { exec } from "child_process";
 import OpenAI from "openai";
 import cors from "cors";
@@ -14,23 +14,19 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// -----------------------------
 // helper
-// -----------------------------
 function execPromise(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
-        console.error("FFmpeg error:", stderr);
+        console.error(stderr);
         reject(stderr);
       } else resolve(stdout);
     });
   });
 }
 
-// -----------------------------
-// 🧠 AI CONTENT (returns 3 variations)
-// -----------------------------
+// AI content
 async function generateContent(prompt) {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -42,23 +38,7 @@ async function generateContent(prompt) {
       {
         role: "user",
         content: `Topic: ${prompt}
-
-Return EXACTLY 3 variations in this format:
-
-===
-
-Hook:
-Caption:
-Script:
-
-===
-
-Hook:
-Caption:
-Script:
-
-===
-
+Return STRICTLY:
 Hook:
 Caption:
 Script:`
@@ -68,45 +48,29 @@ Script:`
 
   const text = res.choices[0].message.content;
 
-  // split into 3
-  const parts = text.split("===")
-    .map(p => p.trim())
-    .filter(Boolean);
+  const hook = text.match(/Hook:(.*)/)?.[1]?.trim() || prompt;
+  const caption = text.match(/Caption:(.*)/)?.[1]?.trim() || "";
+  const script = text.match(/Script:(.*)/s)?.[1]?.trim() || prompt;
 
-  return parts.map(p => {
-    const scriptMatch = p.match(/Script:(.*)/s);
-    return {
-      full: p,
-      script: scriptMatch ? scriptMatch[1].trim() : prompt
-    };
-  });
+  return { hook, caption, script, full: text };
 }
 
-// -----------------------------
-// 🎬 PEXELS (random video)
-// -----------------------------
-async function getPexelsVideo(query) {
+// Pexels
+async function getVideo(query) {
   const res = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=5`,
+    `https://api.pexels.com/videos/search?query=${query}&per_page=10`,
     {
-      headers: {
-        Authorization: process.env.PEXELS_API_KEY
-      }
+      headers: { Authorization: process.env.PEXELS_API_KEY }
     }
   );
 
-  const videos = res.data.videos;
-
-  if (!videos.length) throw "No videos found";
-
-  const random = videos[Math.floor(Math.random() * videos.length)];
+  const vids = res.data.videos;
+  const random = vids[Math.floor(Math.random() * vids.length)];
 
   return random.video_files[0].link;
 }
 
-// -----------------------------
-// 🔊 ELEVENLABS
-// -----------------------------
+// voice
 async function generateVoice(text) {
   const res = await axios.post(
     "https://api.elevenlabs.io/v1/text-to-speech/uIZsnBL0YK1S5j69bAih",
@@ -120,77 +84,63 @@ async function generateVoice(text) {
     }
   );
 
-  const path = `voice-${Date.now()}.mp3`;
-  fs.writeFileSync(path, res.data);
-
-  return path;
+  const file = `voice-${Date.now()}.mp3`;
+  fs.writeFileSync(file, res.data);
+  return file;
 }
 
-// -----------------------------
-// 🚀 MAIN ROUTE (3 VIDEOS)
-// -----------------------------
+// MAIN
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
-    }
-
-    console.log("Prompt:", prompt);
-
-    const aiVariations = await generateContent(prompt);
+    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
 
     const results = [];
 
-    for (let i = 0; i < aiVariations.length; i++) {
-      const ai = aiVariations[i];
+    for (let i = 0; i < 3; i++) {
+      const ai = await generateContent(prompt + " " + i);
 
-      // 🎬 get random video
-      const videoUrl = await getPexelsVideo(prompt + " " + i);
-
+      const videoUrl = await getVideo(prompt);
       const videoPath = `video-${Date.now()}-${i}.mp4`;
 
-      const response = await axios({
+      const videoRes = await axios({
         url: videoUrl,
         method: "GET",
         responseType: "stream"
       });
 
       const writer = fs.createWriteStream(videoPath);
-      response.data.pipe(writer);
+      videoRes.data.pipe(writer);
 
       await new Promise(resolve => writer.on("finish", resolve));
 
-      // 🔊 voice
       const voicePath = await generateVoice(ai.script);
 
       const output = `output-${Date.now()}-${i}.mp4`;
 
-      // 🔥 SAFE FFMPEG (no crash version)
       await execPromise(`
         ffmpeg -y -i ${videoPath} -i ${voicePath} \
-        -vf "scale=540:960" \
         -c:v libx264 -preset ultrafast -crf 32 \
         -shortest ${output}
       `);
 
       results.push({
         videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
-        caption: ai.full
+        hook: ai.hook,
+        caption: ai.caption
       });
     }
 
     res.json({ results });
 
   } catch (err) {
-    console.error("ERROR:", err);
-    res.status(500).json({ error: "Video generation failed" });
+    console.error(err);
+    res.status(500).json({ error: "failed" });
   }
 });
 
-// serve files
 app.use(express.static("."));
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log("Server running"));
+app.listen(process.env.PORT || 8080, () =>
+  console.log("Server running")
+);

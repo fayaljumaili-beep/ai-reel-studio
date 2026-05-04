@@ -2,73 +2,51 @@ const API = "https://ai-reel-studio-production.up.railway.app";
 
 async function generate() {
   const prompt = document.getElementById("prompt").value;
-
-  if (!prompt) return alert("Enter a topic");
-
   const feed = document.getElementById("feed");
-  feed.innerHTML = "<div class='loading'>Generating...</div>";
 
-  try {
-    const res = await fetch(API + "/generate-video", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt })
-    });
+  feed.innerHTML = "<p style='text-align:center'>Generating...</p>";
 
-    const data = await res.json();
+  const res = await fetch(`${API}/generate-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt })
+  });
 
-    feed.innerHTML = "";
+  const data = await res.json();
 
-    data.results.forEach(item => {
-      const card = document.createElement("div");
-      card.className = "video-card";
+  feed.innerHTML = "";
 
-      const vid = document.createElement("video");
-      vid.src = item.videoUrl;
-      vid.muted = true;
-      vid.loop = true;
+  data.results.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "video-card";
 
-      const caption = document.createElement("div");
-      caption.className = "caption";
-      caption.innerText = item.caption;
+    const vid = document.createElement("video");
+    vid.src = item.videoUrl;
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.loop = true;
 
-      const download = document.createElement("a");
-      download.href = item.videoUrl;
-      download.innerText = "⬇";
-      download.className = "download";
+    const hook = document.createElement("div");
+    hook.className = "hook";
+    hook.innerText = item.hook;
 
-      card.appendChild(vid);
-      card.appendChild(caption);
-      card.appendChild(download);
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerText = item.caption;
 
-      feed.appendChild(card);
-    });
+    const download = document.createElement("a");
+    download.href = item.videoUrl;
+    download.innerText = "⬇";
+    download.className = "download";
 
-    setupAutoPlay();
+    card.appendChild(vid);
+    card.appendChild(hook);
+    card.appendChild(meta);
+    card.appendChild(download);
 
-  } catch (err) {
-    console.error(err);
-    feed.innerHTML = "Error ❌";
-  }
+    feed.appendChild(card);
+  });
 }
 
-function setupAutoPlay() {
-  const videos = document.querySelectorAll("video");
-
-  const observer = new IntersectionObserver(
-    entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.play();
-        } else {
-          entry.target.pause();
-        }
-      });
-    },
-    { threshold: 0.6 }
-  );
-
-  videos.forEach(video => observer.observe(video));
-}
-
+// IMPORTANT FIX
 window.generate = generate;
