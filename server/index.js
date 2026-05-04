@@ -9,17 +9,22 @@ import cors from "cors";
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
+// ✅ CRITICAL FIX
 app.use(cors());
+app.use(express.json()); // 🔥 THIS FIXES YOUR ERROR
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// 🧠 safer exec
 function execPromise(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
-      if (err) reject(stderr);
-      else resolve(stdout);
+      if (err) {
+        console.error("FFmpeg error:", stderr);
+        reject(stderr);
+      } else resolve(stdout);
     });
   });
 }
@@ -36,7 +41,7 @@ async function generateContent(prompt) {
       {
         role: "user",
         content: `Topic: ${prompt}
-Return:
+Return STRICTLY:
 Hook:
 Caption:
 Script:`
@@ -44,7 +49,16 @@ Script:`
     ]
   });
 
-  return res.choices[0].message.content;
+  const text = res.choices[0].message.content;
+
+  // 🔥 extract script for voice
+  const scriptMatch = text.match(/Script:(.*)/s);
+  const script = scriptMatch ? scriptMatch[1].trim() : prompt;
+
+  return {
+    full: text,
+    script
+  };
 }
 
 // 🎬 Pexels video
@@ -81,9 +95,16 @@ async function generateVoice(text) {
 }
 
 // 🚀 MAIN ROUTE
-app.post("/generate-video", upload.none(), async (req, res) => {
+app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    // ❌ prevent crash
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
+
+    console.log("Prompt:", prompt);
 
     const ai = await generateContent(prompt);
 
@@ -102,27 +123,30 @@ app.post("/generate-video", upload.none(), async (req, res) => {
 
     await new Promise(resolve => writer.on("finish", resolve));
 
-    const voicePath = await generateVoice(ai);
+    const voicePath = await generateVoice(ai.script);
 
     const output = `output-${Date.now()}.mp4`;
 
+    // 🔥 OPTIMIZED (prevents Railway crash)
     await execPromise(`
       ffmpeg -y -i ${videoPath} -i ${voicePath} \
-      -vf "scale=720:1280" \
-      -shortest -preset ultrafast ${output}
+      -vf "scale=540:960" \
+      -c:v libx264 -preset ultrafast -crf 32 \
+      -shortest ${output}
     `);
 
     res.json({
       videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
-      caption: ai
+      caption: ai.full
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "fail" });
+    console.error("ERROR:", err);
+    res.status(500).json({ error: "Video generation failed" });
   }
 });
 
+// serve files
 app.use(express.static("."));
 
 const PORT = process.env.PORT || 8080;
