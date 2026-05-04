@@ -1,42 +1,45 @@
+const API = "https://ai-reel-studio-production.up.railway.app";
+
 async function generate() {
   const prompt = document.getElementById("prompt").value;
-  const status = document.getElementById("status");
-  const container = document.getElementById("results");
+  const feed = document.getElementById("feed");
 
-  status.innerText = "Generating...";
-  container.innerHTML = "";
+  feed.innerHTML = "Loading...";
 
-  try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ prompt })
-    });
+  const res = await fetch(`${API}/generate-video`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ prompt })
+  });
 
-    const data = await res.json();
+  const data = await res.json();
 
-    console.log(data); // 👈 IMPORTANT (debug)
+  feed.innerHTML = "";
 
-    data.results.forEach(item => {
-      const div = document.createElement("div");
+  data.videos.forEach(video => {
+    const card = document.createElement("div");
+    card.className = "video-card";
 
-      div.innerHTML = `
-        <video controls width="250">
-          <source src="${item.videoUrl}" type="video/mp4">
-        </video>
-        <p>${item.caption}</p>
-        <a href="${item.videoUrl}" download>Download</a>
-      `;
+    const vid = document.createElement("video");
+    vid.src = video.videoUrl;
+    vid.controls = true;
 
-      container.appendChild(div);
-    });
+    const caption = document.createElement("div");
+    caption.className = "caption";
+    caption.innerText = video.caption;
 
-    status.innerText = "Done 🚀";
+    const download = document.createElement("a");
+    download.className = "download";
+    download.href = video.videoUrl;
+    download.innerText = "Download";
+    download.download = "";
 
-  } catch (err) {
-    console.error(err);
-    status.innerText = "Error generating video ❌";
-  }
+    card.appendChild(vid);
+    card.appendChild(caption);
+    card.appendChild(download);
+
+    feed.appendChild(card);
+  });
 }
