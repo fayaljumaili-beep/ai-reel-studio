@@ -1,5 +1,4 @@
 import express from "express";
-import multer from "multer";
 import fs from "fs";
 import axios from "axios";
 import { exec } from "child_process";
@@ -7,7 +6,6 @@ import OpenAI from "openai";
 import cors from "cors";
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
 
 app.use(cors());
 app.use(express.json());
@@ -16,7 +14,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// 🔧 safer exec
+// -----------------------------
+// helper
+// -----------------------------
 function execPromise(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
@@ -28,49 +28,66 @@ function execPromise(cmd) {
   });
 }
 
-// 🧠 UPGRADED AI (hook + script)
+// -----------------------------
+// 🧠 AI CONTENT (returns 3 variations)
+// -----------------------------
 async function generateContent(prompt) {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
-        content: "You are a viral TikTok content expert."
+        content: "You create viral TikTok hooks and captions."
       },
       {
         role: "user",
-        content: `
-Topic: ${prompt}
+        content: `Topic: ${prompt}
 
-Create ONE viral short-form video idea.
+Return EXACTLY 3 variations in this format:
 
-Return EXACTLY:
+===
 
 Hook:
-Main:
-CTA:
 Caption:
-`
+Script:
+
+===
+
+Hook:
+Caption:
+Script:
+
+===
+
+Hook:
+Caption:
+Script:`
       }
     ]
   });
 
   const text = res.choices[0].message.content;
 
-  const hook = text.match(/Hook:(.*)/)?.[1]?.trim() || "";
-  const main = text.match(/Main:(.*)/)?.[1]?.trim() || "";
+  // split into 3
+  const parts = text.split("===")
+    .map(p => p.trim())
+    .filter(Boolean);
 
-  return {
-    full: text,
-    hook,
-    script: `${hook}. ${main}`
-  };
+  return parts.map(p => {
+    const scriptMatch = p.match(/Script:(.*)/s);
+    return {
+      full: p,
+      script: scriptMatch ? scriptMatch[1].trim() : prompt
+    };
+  });
 }
 
-// 🎬 Pexels
+// -----------------------------
+// 🎬 PEXELS (random video)
+// -----------------------------
 async function getPexelsVideo(query) {
   const res = await axios.get(
-    `https://api.pexels.com/videos/search?query=${query}&per_page=10`,
+    `https://api.pexels.com/videos/search?query=${query}&per_page=5`,
     {
       headers: {
         Authorization: process.env.PEXELS_API_KEY
@@ -80,15 +97,16 @@ async function getPexelsVideo(query) {
 
   const videos = res.data.videos;
 
-  if (!videos.length) throw new Error("No videos found");
+  if (!videos.length) throw "No videos found";
 
-  // 🔥 RANDOMIZE
-  const randomIndex = Math.floor(Math.random() * videos.length);
+  const random = videos[Math.floor(Math.random() * videos.length)];
 
-  return videos[randomIndex].video_files[0].link;
+  return random.video_files[0].link;
 }
 
-// 🔊 ElevenLabs
+// -----------------------------
+// 🔊 ELEVENLABS
+// -----------------------------
 async function generateVoice(text) {
   const res = await axios.post(
     "https://api.elevenlabs.io/v1/text-to-speech/uIZsnBL0YK1S5j69bAih",
@@ -104,10 +122,13 @@ async function generateVoice(text) {
 
   const path = `voice-${Date.now()}.mp3`;
   fs.writeFileSync(path, res.data);
+
   return path;
 }
 
-// 🚀 MAIN ROUTE (MULTI VARIATION)
+// -----------------------------
+// 🚀 MAIN ROUTE (3 VIDEOS)
+// -----------------------------
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -116,14 +137,17 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
+    console.log("Prompt:", prompt);
+
+    const aiVariations = await generateContent(prompt);
+
     const results = [];
 
-    // 🔥 LOOP = REAL PRODUCT
-    for (let i = 0; i < 3; i++) {
-      const variationPrompt = `${prompt} variation ${i + 1}`;
+    for (let i = 0; i < aiVariations.length; i++) {
+      const ai = aiVariations[i];
 
-      const ai = await generateContent(variationPrompt);
-      const videoUrl = await getPexelsVideo(variationPrompt);
+      // 🎬 get random video
+      const videoUrl = await getPexelsVideo(prompt + " " + i);
 
       const videoPath = `video-${Date.now()}-${i}.mp4`;
 
@@ -138,23 +162,18 @@ app.post("/generate-video", async (req, res) => {
 
       await new Promise(resolve => writer.on("finish", resolve));
 
+      // 🔊 voice
       const voicePath = await generateVoice(ai.script);
 
       const output = `output-${Date.now()}-${i}.mp4`;
 
+      // 🔥 SAFE FFMPEG (no crash version)
       await execPromise(`
-  ffmpeg -y \
-  -i ${videoPath} \
-  -i ${voicePath} \
-  -i assets/music.mp3 \
-  -filter_complex "[1:a]volume=1.0[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[aout]" \
-  -map 0:v \
-  -map "[aout]" \
-  -vf "scale=540:960" \
-  -t 8 \
-  -c:v libx264 -preset ultrafast -crf 32 \
-  -shortest ${output}
-`);
+        ffmpeg -y -i ${videoPath} -i ${voicePath} \
+        -vf "scale=540:960" \
+        -c:v libx264 -preset ultrafast -crf 32 \
+        -shortest ${output}
+      `);
 
       results.push({
         videoUrl: `https://ai-reel-studio-production.up.railway.app/${output}`,
