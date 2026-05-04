@@ -1,12 +1,10 @@
 async function generate() {
   const prompt = document.getElementById("prompt").value;
   const status = document.getElementById("status");
-  const container = document.getElementById("videos");
-  const btn = document.getElementById("generateBtn");
+  const container = document.getElementById("results");
 
+  status.innerText = "Generating...";
   container.innerHTML = "";
-  status.innerText = "Generating viral reels...";
-  btn.disabled = true;
 
   try {
     const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
@@ -19,41 +17,26 @@ async function generate() {
 
     const data = await res.json();
 
-    if (!data.videos) {
-      throw new Error("No videos returned");
-    }
+    console.log(data); // 👈 IMPORTANT (debug)
 
-    data.videos.forEach(v => {
-      const card = document.createElement("div");
-      card.className = "card";
+    data.results.forEach(item => {
+      const div = document.createElement("div");
 
-      const video = document.createElement("video");
-      video.src = v.videoUrl;
-      video.controls = true;
+      div.innerHTML = `
+        <video controls width="250">
+          <source src="${item.videoUrl}" type="video/mp4">
+        </video>
+        <p>${item.caption}</p>
+        <a href="${item.videoUrl}" download>Download</a>
+      `;
 
-      const caption = document.createElement("p");
-      caption.className = "caption";
-      caption.innerText = v.caption;
-
-      const download = document.createElement("a");
-      download.href = v.videoUrl;
-      download.innerText = "Download";
-      download.className = "download";
-      download.download = "reel.mp4";
-
-      card.appendChild(video);
-      card.appendChild(caption);
-      card.appendChild(download);
-
-      container.appendChild(card);
+      container.appendChild(div);
     });
 
     status.innerText = "Done 🚀";
-    btn.disabled = false;
 
   } catch (err) {
     console.error(err);
     status.innerText = "Error generating video ❌";
-    btn.disabled = false;
   }
 }
