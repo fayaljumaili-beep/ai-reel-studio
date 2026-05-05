@@ -1,3 +1,4 @@
+import cors from "cors";
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
@@ -5,6 +6,8 @@ import path from "path";
 import { execSync } from "child_process";
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
 // 🔥 Serve videos publicly
