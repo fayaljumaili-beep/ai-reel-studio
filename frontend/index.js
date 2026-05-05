@@ -1,56 +1,28 @@
-const API_URL = "https://ai-reel-studio-production.up.railway.app";
-
-document.getElementById("generateBtn").addEventListener("click", generateVideo);
-
-async function generateVideo() {
-  console.log("CLICKED"); // 🧪 debug
-
+async function generate() {
   const idea = document.getElementById("idea").value;
   const status = document.getElementById("status");
-  const result = document.getElementById("result");
-
-  if (!idea) {
-    status.innerText = "❌ Please enter an idea";
-    return;
-  }
+  const video = document.getElementById("video");
 
   status.innerText = "⏳ Generating...";
-  result.innerHTML = "";
+  video.src = "";
 
   try {
-    const res = await fetch(`${API_URL}/generate-video`, {
+    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ idea }), // ✅ MUST be "idea"
+      body: JSON.stringify({ idea }),
     });
 
     const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Failed");
-    }
+    if (!res.ok) throw new Error(data.error);
 
-    console.log(data);
-
-    status.innerText = "✅ Video ready";
-
-    // 🎬 Create video element
-    const video = document.createElement("video");
     video.src = data.video;
-    video.controls = true;
-    video.autoplay = true;
-
-    // 🧠 Show script (optional but cool)
-    const script = document.createElement("p");
-    script.innerText = data.script;
-
-    result.appendChild(video);
-    result.appendChild(script);
+    status.innerText = "✅ Done";
 
   } catch (err) {
-    console.error(err);
-    status.innerText = "❌ Error generating video";
+    status.innerText = "❌ " + err.message;
   }
 }

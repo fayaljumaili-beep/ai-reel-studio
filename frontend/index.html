@@ -1,59 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>AI Reel Generator</title>
   <style>
     body {
-      background: #000;
+      background: black;
       color: white;
-      font-family: Arial;
       text-align: center;
-      padding: 40px;
+      font-family: Arial;
     }
 
     input {
       padding: 10px;
-      width: 300px;
-      border-radius: 8px;
+      width: 250px;
+      border-radius: 5px;
       border: none;
-      margin-bottom: 10px;
     }
 
     button {
-      padding: 12px 20px;
-      background: #ff2d55;
+      padding: 10px 20px;
+      background: hotpink;
       border: none;
-      border-radius: 8px;
-      color: white;
+      border-radius: 5px;
       cursor: pointer;
-      font-weight: bold;
+      margin-top: 10px;
     }
 
     video {
       margin-top: 20px;
       width: 300px;
-      border-radius: 12px;
+      border-radius: 10px;
     }
   </style>
-
-  <!-- ✅ IMPORTANT -->
-  <script src="index.js" defer></script>
 </head>
+
 <body>
 
-  <h1>🎬 AI Reel Generator</h1>
+<h1>🎬 AI Reel Generator</h1>
 
-  <input id="idea" placeholder="Enter idea..." />
+<input id="idea" placeholder="Enter idea..." />
+<br>
+<button onclick="generate()">Generate</button>
 
-  <br />
+<p id="status"></p>
 
-  <!-- ✅ BUTTON WORKS -->
-  <button id="generateBtn">Generate</button>
+<video id="video" controls></video>
 
-  <p id="status"></p>
-
-  <div id="result"></div>
+<script src="index.js"></script>
 
 </body>
 </html>
