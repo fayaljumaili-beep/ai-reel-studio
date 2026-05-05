@@ -10,18 +10,18 @@ dotenv.config();
 
 const app = express();
 
-// ✅ CORS + BODY
+// ✅ Middleware
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 8080;
 
-// 📁 TEMP DIR
+// 📁 Temp folder
 const TEMP_DIR = "temp";
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// 🧹 CLEAN TEMP (prevents crashes later)
+// 🧹 Clean temp
 function cleanTemp() {
   const files = fs.readdirSync(TEMP_DIR);
   for (const file of files) {
@@ -29,14 +29,15 @@ function cleanTemp() {
   }
 }
 
-// 🔥 MAIN ENDPOINT
+// 🎬 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
     console.log("📦 BODY:", req.body);
 
-    const idea = req.body?.idea?.trim();
+    // ✅ Accept BOTH (prevents bugs forever)
+    const idea = req.body?.idea || req.body?.prompt;
 
-    if (!idea) {
+    if (!idea || idea.trim() === "") {
       console.log("❌ No idea provided");
       return res.status(400).json({ error: "No idea provided" });
     }
@@ -45,7 +46,7 @@ app.post("/generate-video", async (req, res) => {
 
     cleanTemp();
 
-    // 🎯 FETCH VIDEOS
+    // 🎯 Fetch videos
     const searchRes = await axios.get(
       `https://api.pexels.com/videos/search?query=${encodeURIComponent(idea)}&per_page=3`,
       {
@@ -58,13 +59,12 @@ app.post("/generate-video", async (req, res) => {
     const videos = searchRes.data.videos;
 
     if (!videos?.length) {
-      console.log("❌ No videos found");
       return res.status(400).json({ error: "No videos found" });
     }
 
     console.log("✅ Found clips:", videos.length);
 
-    // 🎬 DOWNLOAD CLIPS (pick best quality)
+    // 🎥 Download clips
     const clipPaths = [];
 
     for (let i = 0; i < videos.length; i++) {
@@ -97,10 +97,10 @@ app.post("/generate-video", async (req, res) => {
     }
 
     if (clipPaths.length === 0) {
-      return res.status(400).json({ error: "No valid clips downloaded" });
+      return res.status(400).json({ error: "No clips downloaded" });
     }
 
-    // 🧩 CONCAT FILE
+    // 🧩 Create concat file
     const listPath = path.join(TEMP_DIR, "videos.txt");
 
     const fileList = clipPaths
@@ -111,7 +111,7 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("📄 videos.txt created");
 
-    // 🎞 FFmpeg (MORE STABLE VERSION)
+    // 🎞 FFmpeg
     const outputVideo = path.join(TEMP_DIR, "final.mp4");
 
     const ffmpegCmd = `
@@ -137,7 +137,7 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// 📡 SERVE VIDEO
+// 📡 Serve video
 app.get("/final.mp4", (req, res) => {
   const filePath = path.join(TEMP_DIR, "final.mp4");
 
@@ -148,7 +148,7 @@ app.get("/final.mp4", (req, res) => {
   res.sendFile(path.resolve(filePath));
 });
 
-// 🚀 START
+// 🚀 Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
