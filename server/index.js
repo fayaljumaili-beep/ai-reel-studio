@@ -54,7 +54,7 @@ app.post("/generate-video", async (req, res) => {
 
     // 🎙️ 2. Generate voice
     const voiceRes = await axios.post(
-      "https://api.elevenlabs.io/v1/text-to-speech/DwwuoY7Uz8AP8zrY5TAo",
+      "https://api.elevenlab.io/v1/text-to-speech/DwwuoY7Uz8AP8zrY5TAo",
       {
         text: script,
       },
