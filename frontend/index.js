@@ -1,83 +1,71 @@
-const API = "https://ai-reel-studio-production.up.railway.app/generate-video";
+// 🔥 CONFIG — PUT YOUR BACKEND URL HERE
+const API_URL = "https://ai-reel-studio-production.up.railway.app/generate-video";
 
-async function generate() {
-  console.log("🔥 Generate clicked");
+// 🎯 ELEMENTS
+const generateBtn = document.getElementById("generateBtn");
+const input = document.getElementById("ideaInput");
+const videoContainer = document.getElementById("videoContainer");
+const statusText = document.getElementById("statusText");
 
-  const promptEl = document.getElementById("prompt");
-  const scenarioEl = document.getElementById("scenario");
-  const toneEl = document.getElementById("tone");
-  const feed = document.getElementById("feed");
+// 🎬 MAIN CLICK HANDLER
+generateBtn.addEventListener("click", async () => {
+  const idea = input.value.trim();
 
-  const prompt = promptEl?.value || "";
-  const scenario = scenarioEl?.value || "";
-  const tone = toneEl?.value || "";
+  if (!idea) {
+    alert("Enter an idea first");
+    return;
+  }
 
-  const fullPrompt = `${prompt} in a ${scenario} style with ${tone} tone`;
+  console.log("🔥 Generate clicked:", idea);
 
-  // 🧠 UI loading state
-  feed.innerHTML = `
-    <div style="color:white; text-align:center; padding:20px;">
-      ⏳ Generating viral video...
-    </div>
-  `;
+  // UI reset
+  statusText.innerText = "Generating video...";
+  videoContainer.innerHTML = "";
 
   try {
-    const res = await fetch(API, {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ prompt: fullPrompt }),
+      body: JSON.stringify({
+        idea: idea // ✅ FIXED
+      })
     });
 
+    console.log("📡 Response status:", res.status);
+
     if (!res.ok) {
-      throw new Error("Server error");
+      const errText = await res.text();
+      console.error("❌ Server error:", errText);
+      statusText.innerText = "❌ Failed to generate video";
+      return;
     }
 
     const data = await res.json();
+    console.log("✅ Response data:", data);
 
-    console.log("✅ Response:", data);
+    if (!data.video) {
+      statusText.innerText = "❌ No video returned";
+      return;
+    }
 
-    renderVideo(data);
+    // 🎥 SHOW VIDEO
+    const video = document.createElement("video");
+    video.src = data.video;
+    video.controls = true;
+    video.autoplay = true;
+    video.loop = true;
+    video.style.width = "100%";
+    video.style.borderRadius = "12px";
+
+    videoContainer.innerHTML = "";
+    videoContainer.appendChild(video);
+
+    statusText.innerText = "✅ Video ready";
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
-
-    feed.innerHTML = `
-      <div style="color:red; text-align:center;">
-        ❌ Failed to generate video
-      </div>
-    `;
+    console.error("❌ Fetch error:", err);
+    statusText.innerText = "❌ Network error";
   }
-}
-
-function renderVideo(data) {
-  const feed = document.getElementById("feed");
-
-  feed.innerHTML = "";
-
-  const card = document.createElement("div");
-  card.style.marginTop = "20px";
-
-  // 🎬 VIDEO
-  const video = document.createElement("video");
-  video.src = data.video;
-  video.controls = true;
-  video.autoplay = true;
-  video.loop = true;
-  video.style.width = "100%";
-  video.style.borderRadius = "12px";
-
-  // 📝 SCRIPT TEXT
-  const script = document.createElement("p");
-  script.innerText = data.script || "";
-  script.style.color = "white";
-  script.style.marginTop = "10px";
-  script.style.fontSize = "14px";
-  script.style.lineHeight = "1.5";
-
-  card.appendChild(video);
-  card.appendChild(script);
-
-  feed.appendChild(card);
-}
+});
