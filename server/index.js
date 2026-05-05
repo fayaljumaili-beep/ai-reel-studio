@@ -65,7 +65,7 @@ app.post("/generate-video", async (req, res) => {
     );
 
     // 🚀 RESPOND FAST
-    const videoUrl = `https://${req.headers.host}/stitched.mp4`;
+    const videoUrl = `https://${req.headers.host}/final.mp4`;
 
     res.json({
       video: videoUrl,
