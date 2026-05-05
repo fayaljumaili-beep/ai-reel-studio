@@ -114,13 +114,7 @@ app.post("/generate-video", async (req, res) => {
     // 🎞 FFmpeg
     const outputVideo = path.join(TEMP_DIR, "final.mp4");
 
-    const ffmpegCmd = `
-      ffmpeg -y -f concat -safe 0 -i ${listPath}
-      -vf "scale=720:1280,format=yuv420p"
-      -c:v libx264 -preset veryfast -crf 23
-      -c:a aac -b:a 128k
-      ${outputVideo}
-    `;
+    const ffmpegCmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -vf "scale=720:1280,format=yuv420p" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k "${outputVideo}"`;
 
     console.log("🎬 Running ffmpeg...");
     execSync(ffmpegCmd);
