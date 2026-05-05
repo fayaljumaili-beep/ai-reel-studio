@@ -5,19 +5,23 @@ import path from "path";
 import axios from "axios";
 import { execSync } from "child_process";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
 
 const app = express();
 
-// ✅ MIDDLEWARE
 app.use(cors({ origin: "*" }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-// 📁 TEMP DIR
+// ✅ OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// 📁 temp folder
 const TEMP_DIR = "temp";
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR);
@@ -26,22 +30,49 @@ if (!fs.existsSync(TEMP_DIR)) {
 // 🔥 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("BODY:", req.body);
-
     const { idea } = req.body;
 
     if (!idea) {
-      console.log("❌ No idea provided");
       return res.status(400).json({ error: "No idea provided" });
     }
 
     console.log("🔥 START:", idea);
 
-    // 🧠 CLEAN CAPTION TEXT (IMPORTANT)
-    const caption = idea.toUpperCase().slice(0, 60);
-    const safeCaption = caption.replace(/'/g, "").replace(/:/g, "");
+    // 🧠 1. Generate script
+    const scriptRes = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: `Write a short viral TikTok script about: ${idea}`,
+        },
+      ],
+    });
 
-    // 🎯 STEP 1: FETCH VIDEOS FROM PEXELS
+    const script = scriptRes.choices[0].message.content;
+    console.log("🧠 Script:", script);
+
+    // 🎙️ 2. Generate voice
+    const voiceRes = await axios.post(
+      "https://api.elevenlabs.io/v1/text-to-speech/DwwuoY7Uz8AP8zrY5TAo",
+      {
+        text: script,
+      },
+      {
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        responseType: "arraybuffer",
+      }
+    );
+
+    const voicePath = path.join(TEMP_DIR, "voice.mp3");
+    fs.writeFileSync(voicePath, voiceRes.data);
+
+    console.log("🎙️ Voice ready");
+
+    // 🎯 3. Fetch videos
     const searchRes = await axios.get(
       `https://api.pexels.com/videos/search?query=${encodeURIComponent(
         idea
@@ -56,13 +87,11 @@ app.post("/generate-video", async (req, res) => {
     const videos = searchRes.data.videos;
 
     if (!videos || videos.length === 0) {
-      console.log("❌ No videos found");
       return res.status(400).json({ error: "No videos found" });
     }
 
     console.log("✅ Found clips:", videos.length);
 
-    // 🎬 STEP 2: DOWNLOAD CLIPS
     const clipPaths = [];
 
     for (let i = 0; i < videos.length; i++) {
@@ -70,8 +99,6 @@ app.post("/generate-video", async (req, res) => {
       const url = file.link;
 
       const outputPath = path.join(TEMP_DIR, `clip_${i}.mp4`);
-
-      console.log("⬇️ Downloading:", url);
 
       const response = await axios({
         url,
@@ -88,34 +115,35 @@ app.post("/generate-video", async (req, res) => {
       });
 
       clipPaths.push(outputPath);
-      console.log("✅ Saved:", outputPath);
     }
 
-    // 🧩 STEP 3: CREATE CONCAT FILE
+    // 🧩 4. Create concat list
     const listPath = path.join(TEMP_DIR, "videos.txt");
 
-    const fileList = clipPaths
-      .map((p) => `file '${path.resolve(p)}'`)
-      .join("\n");
+    fs.writeFileSync(
+      listPath,
+      clipPaths.map((p) => `file '${path.resolve(p)}'`).join("\n")
+    );
 
-    fs.writeFileSync(listPath, fileList);
+    // 🎬 5. Stitch clips
+    const stitchedPath = path.join(TEMP_DIR, "stitched.mp4");
 
-    console.log("📄 videos.txt created");
+    execSync(
+      `ffmpeg -y -f concat -safe 0 -i ${listPath} -c copy ${stitchedPath}`
+    );
 
-    // 🎞 STEP 4: FFMPEG (WITH CAPTIONS 🔥)
-    const outputVideo = path.join(TEMP_DIR, "final.mp4");
+    // 🎧 6. Add voiceover
+    const finalPath = path.join(TEMP_DIR, "final.mp4");
 
-    const ffmpegCmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -vf "scale=720:1280,format=yuv420p,drawtext=text='${safeCaption}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.5:boxborderw=10:x=(w-text_w)/2:y=h-200" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k "${outputVideo}"`;
-
-    console.log("🎬 Running ffmpeg...");
-    execSync(ffmpegCmd);
+    execSync(
+      `ffmpeg -y -i ${stitchedPath} -i ${voicePath} -map 0:v -map 1:a -shortest -c:v copy -c:a aac ${finalPath}`
+    );
 
     console.log("✅ FINAL VIDEO READY");
 
-    // 🌍 STEP 5: RETURN VIDEO URL
     const videoUrl = `${req.protocol}://${req.get("host")}/final.mp4`;
 
-    res.json({ video: videoUrl });
+    res.json({ video: videoUrl, script });
 
   } catch (err) {
     console.error("❌ ERROR:", err.message);
@@ -123,7 +151,7 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// 📡 SERVE VIDEO
+// 📡 Serve video
 app.get("/final.mp4", (req, res) => {
   const filePath = path.join(TEMP_DIR, "final.mp4");
 
@@ -134,7 +162,6 @@ app.get("/final.mp4", (req, res) => {
   res.sendFile(path.resolve(filePath));
 });
 
-// 🚀 START SERVER
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

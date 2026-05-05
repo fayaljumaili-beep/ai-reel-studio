@@ -1,71 +1,43 @@
-// 🔥 CONFIG
-const API_URL = "https://ai-reel-studio-production.up.railway.app/generate-video";
+const API_URL = "https://ai-reel-studio-production.up.railway.app";
 
-// 🎯 ELEMENTS
-const generateBtn = document.getElementById("generateBtn");
-const input = document.getElementById("ideaInput");
-const videoContainer = document.getElementById("videoContainer");
-const statusText = document.getElementById("statusText");
+async function generateVideo() {
+  const idea = document.getElementById("idea").value;
+  const status = document.getElementById("status");
+  const result = document.getElementById("result");
 
-// 🎬 CLICK HANDLER
-generateBtn.addEventListener("click", async () => {
-  const idea = input.value.trim();
-
-  if (!idea) {
-    alert("Enter an idea first");
-    return;
-  }
-
-  console.log("🔥 Sending idea:", idea);
-
-  // UI reset
-  statusText.innerText = "⏳ Generating video...";
-  videoContainer.innerHTML = "";
+  status.innerText = "⏳ Generating...";
+  result.innerHTML = "";
 
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${API_URL}/generate-video`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        idea: idea // ✅ CORRECT KEY
-      }),
+      body: JSON.stringify({ idea }),
     });
 
-    console.log("📡 Status:", res.status);
+    const data = await res.json();
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("❌ Server error:", errText);
-      statusText.innerText = "❌ Failed to generate video";
-      return;
+      throw new Error(data.error);
     }
 
-    const data = await res.json();
-    console.log("✅ Data:", data);
+    status.innerText = "✅ Video ready";
 
-    if (!data.video) {
-      statusText.innerText = "❌ No video returned";
-      return;
-    }
-
-    // 🎥 Show video
     const video = document.createElement("video");
     video.src = data.video;
     video.controls = true;
-    video.autoplay = true;
-    video.loop = true;
-    video.style.width = "100%";
-    video.style.borderRadius = "12px";
+    video.width = 300;
 
-    videoContainer.innerHTML = "";
-    videoContainer.appendChild(video);
+    const script = document.createElement("p");
+    script.innerText = data.script;
 
-    statusText.innerText = "✅ Video ready";
+    result.appendChild(video);
+    result.appendChild(script);
 
   } catch (err) {
-    console.error("❌ Network error:", err);
-    statusText.innerText = "❌ Network error";
+    console.error(err);
+    status.innerText = "❌ Failed";
   }
-});
+}
