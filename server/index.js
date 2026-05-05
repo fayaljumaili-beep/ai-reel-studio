@@ -1,24 +1,24 @@
-import cors from "cors";
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import cors from "cors";
+import axios from "axios";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-// 🔥 Serve videos publicly
 app.use(express.static(process.cwd()));
 
 const PORT = process.env.PORT || 8080;
 
-// ===== CONFIG =====
+// ===== ENV =====
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 
-// ===== HELPER: download video =====
+// ===== DOWNLOAD VIDEO =====
 async function downloadVideo(url, filename) {
   const res = await fetch(url);
   const fileStream = fs.createWriteStream(filename);
@@ -27,6 +27,25 @@ async function downloadVideo(url, filename) {
     res.body.on("error", reject);
     fileStream.on("finish", resolve);
   });
+}
+
+// ===== GENERATE VOICE =====
+async function generateVoice(text) {
+  const response = await axios({
+    method: "POST",
+    url: "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+    headers: {
+      "xi-api-key": ELEVEN_API_KEY,
+      "Content-Type": "application/json"
+    },
+    data: {
+      text,
+      model_id: "eleven_monolingual_v1"
+    },
+    responseType: "arraybuffer"
+  });
+
+  fs.writeFileSync("voice.mp3", response.data);
 }
 
 // ===== MAIN ROUTE =====
@@ -38,7 +57,7 @@ app.post("/generate-video", async (req, res) => {
 
     const scenes = [
       prompt,
-      "coffee aesthetic",
+      "success mindset",
       "luxury car"
     ];
 
@@ -52,7 +71,7 @@ app.post("/generate-video", async (req, res) => {
       const response = await fetch(
         `https://api.pexels.com/videos/search?query=${query}&per_page=1`,
         {
-          headers: { Authorization: PEXELS_API_KEY },
+          headers: { Authorization: PEXELS_API_KEY }
         }
       );
 
@@ -78,7 +97,7 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🎬 clips ready:", clips);
 
-    // ===== CREATE CONCAT FILE =====
+    // ===== CONCAT FILE =====
     const listFile = "videos.txt";
     fs.writeFileSync(
       listFile,
@@ -87,24 +106,37 @@ app.post("/generate-video", async (req, res) => {
 
     // ===== STITCH =====
     console.log("🎞 stitching...");
-    execSync(
-      `ffmpeg -y -f concat -safe 0 -i ${listFile} -c copy stitched.mp4`
-    );
+    execSync(`ffmpeg -y -f concat -safe 0 -i ${listFile} -c copy stitched.mp4`);
 
-    // ===== LOOP (make longer) =====
+    // ===== LOOP =====
     console.log("🔁 looping...");
-    execSync(
-      `ffmpeg -y -stream_loop 2 -i stitched.mp4 -c copy final.mp4`
-    );
+    execSync(`ffmpeg -y -stream_loop 2 -i stitched.mp4 -c copy final.mp4`);
 
-    console.log("✅ FINAL READY");
+    // ===== SCRIPT (basic for now) =====
+    const script = `
+Success is not luck.
+It is discipline.
+It is showing up every day.
+Your dream life is built, not wished for.
+`;
 
-    // ===== RESPONSE =====
-    const videoUrl = `https://${req.headers.host}/final.mp4`;
+    // ===== VOICE =====
+    console.log("🎙 generating voice...");
+    await generateVoice(script);
+
+    // ===== MERGE AUDIO + VIDEO =====
+    console.log("🎧 merging voice...");
+    execSync(`
+      ffmpeg -y -i final.mp4 -i voice.mp3 \
+      -c:v copy -c:a aac -shortest output.mp4
+    `);
+
+    console.log("✅ FINAL VIDEO READY");
+
+    const videoUrl = `https://${req.headers.host}/output.mp4`;
 
     res.json({
-      video: videoUrl,
-      preview: `https://${req.headers.host}/stitched.mp4`
+      video: videoUrl
     });
 
   } catch (err) {
