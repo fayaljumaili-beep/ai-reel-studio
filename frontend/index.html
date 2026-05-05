@@ -2,96 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Reel Generator</title>
-
   <style>
     body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0f0f0f;
+      background: #000;
       color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-
-    .app {
-      width: 100%;
-      max-width: 420px;
-      padding: 20px;
-    }
-
-    h1 {
+      font-family: Arial;
       text-align: center;
-      margin-bottom: 20px;
+      padding: 40px;
     }
 
     input {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
+      padding: 10px;
+      width: 300px;
+      border-radius: 8px;
       border: none;
       margin-bottom: 10px;
-      font-size: 14px;
     }
 
     button {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
+      padding: 12px 20px;
+      background: #ff2d55;
       border: none;
-      background: #ff004f;
+      border-radius: 8px;
       color: white;
-      font-weight: bold;
       cursor: pointer;
-      margin-bottom: 10px;
-    }
-
-    button:hover {
-      background: #ff2a6d;
-    }
-
-    #statusText {
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-
-    #videoContainer {
-      width: 100%;
-      margin-top: 10px;
+      font-weight: bold;
     }
 
     video {
-      width: 100%;
+      margin-top: 20px;
+      width: 300px;
       border-radius: 12px;
     }
   </style>
+
+  <!-- ✅ IMPORTANT -->
+  <script src="index.js" defer></script>
 </head>
-
 <body>
-  <div class="app">
-    <h1>🎬 AI Reel Generator</h1>
 
-    <!-- INPUT -->
-    <input 
-      id="ideaInput" 
-      placeholder="e.g. luxury lifestyle morning routine" 
-    />
+  <h1>🎬 AI Reel Generator</h1>
 
-    <!-- BUTTON -->
-    <button id="generateBtn">Generate</button>
+  <input id="idea" placeholder="Enter idea..." />
 
-    <!-- STATUS -->
-    <p id="statusText"></p>
+  <br />
 
-    <!-- VIDEO OUTPUT -->
-    <div id="videoContainer"></div>
-  </div>
+  <!-- ✅ BUTTON WORKS -->
+  <button id="generateBtn">Generate</button>
 
-  <!-- SCRIPT -->
-  <script src="index.js"></script>
+  <p id="status"></p>
+
+  <div id="result"></div>
+
 </body>
 </html>
