@@ -1,4 +1,4 @@
-// 🔥 CONFIG — PUT YOUR BACKEND URL HERE
+// 🔥 CONFIG — YOUR BACKEND URL
 const API_URL = "https://ai-reel-studio-production.up.railway.app/generate-video";
 
 // 🎯 ELEMENTS
@@ -7,7 +7,7 @@ const input = document.getElementById("ideaInput");
 const videoContainer = document.getElementById("videoContainer");
 const statusText = document.getElementById("statusText");
 
-// 🎬 MAIN CLICK HANDLER
+// 🎬 CLICK HANDLER
 generateBtn.addEventListener("click", async () => {
   const idea = input.value.trim();
 
@@ -16,10 +16,10 @@ generateBtn.addEventListener("click", async () => {
     return;
   }
 
-  console.log("🔥 Generate clicked:", idea);
+  console.log("🔥 Sending prompt:", idea);
 
   // UI reset
-  statusText.innerText = "Generating video...";
+  statusText.innerText = "⏳ Generating video...";
   videoContainer.innerHTML = "";
 
   try {
@@ -29,11 +29,11 @@ generateBtn.addEventListener("click", async () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        idea: idea // ✅ FIXED
+        prompt: idea // ✅ FIXED KEY
       })
     });
 
-    console.log("📡 Response status:", res.status);
+    console.log("📡 Status:", res.status);
 
     if (!res.ok) {
       const errText = await res.text();
@@ -43,19 +43,21 @@ generateBtn.addEventListener("click", async () => {
     }
 
     const data = await res.json();
-    console.log("✅ Response data:", data);
+    console.log("✅ Response:", data);
 
-    if (!data.video) {
+    if (!data.videoUrl) {
       statusText.innerText = "❌ No video returned";
       return;
     }
 
-    // 🎥 SHOW VIDEO
+    // 🎥 CREATE VIDEO
     const video = document.createElement("video");
-    video.src = data.video;
+    video.src = data.videoUrl;
     video.controls = true;
     video.autoplay = true;
     video.loop = true;
+    video.muted = true; // autoplay fix
+    video.playsInline = true;
     video.style.width = "100%";
     video.style.borderRadius = "12px";
 
