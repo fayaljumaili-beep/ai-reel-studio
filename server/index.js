@@ -10,45 +10,42 @@ dotenv.config();
 
 const app = express();
 
-// ✅ Middleware
+// ✅ MIDDLEWARE
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 8080;
 
-// 📁 Temp folder
+// 📁 TEMP DIR
 const TEMP_DIR = "temp";
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
-
-// 🧹 Clean temp
-function cleanTemp() {
-  const files = fs.readdirSync(TEMP_DIR);
-  for (const file of files) {
-    fs.unlinkSync(path.join(TEMP_DIR, file));
-  }
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR);
 }
 
-// 🎬 MAIN ENDPOINT
+// 🔥 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
-    console.log("📦 BODY:", req.body);
+    console.log("BODY:", req.body);
 
-    // ✅ Accept BOTH (prevents bugs forever)
-    const idea = req.body?.idea || req.body?.prompt;
+    const { idea } = req.body;
 
-    if (!idea || idea.trim() === "") {
+    if (!idea) {
       console.log("❌ No idea provided");
       return res.status(400).json({ error: "No idea provided" });
     }
 
     console.log("🔥 START:", idea);
 
-    cleanTemp();
+    // 🧠 CLEAN CAPTION TEXT (IMPORTANT)
+    const caption = idea.toUpperCase().slice(0, 60);
+    const safeCaption = caption.replace(/'/g, "").replace(/:/g, "");
 
-    // 🎯 Fetch videos
+    // 🎯 STEP 1: FETCH VIDEOS FROM PEXELS
     const searchRes = await axios.get(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(idea)}&per_page=3`,
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
+        idea
+      )}&per_page=3`,
       {
         headers: {
           Authorization: process.env.PEXELS_API_KEY,
@@ -58,28 +55,26 @@ app.post("/generate-video", async (req, res) => {
 
     const videos = searchRes.data.videos;
 
-    if (!videos?.length) {
+    if (!videos || videos.length === 0) {
+      console.log("❌ No videos found");
       return res.status(400).json({ error: "No videos found" });
     }
 
     console.log("✅ Found clips:", videos.length);
 
-    // 🎥 Download clips
+    // 🎬 STEP 2: DOWNLOAD CLIPS
     const clipPaths = [];
 
     for (let i = 0; i < videos.length; i++) {
-      const file = videos[i].video_files.find(
-        (f) => f.quality === "sd" || f.quality === "hd"
-      );
-
-      if (!file?.link) continue;
+      const file = videos[i].video_files[0];
+      const url = file.link;
 
       const outputPath = path.join(TEMP_DIR, `clip_${i}.mp4`);
 
-      console.log("⬇️ Downloading:", file.link);
+      console.log("⬇️ Downloading:", url);
 
       const response = await axios({
-        url: file.link,
+        url,
         method: "GET",
         responseType: "stream",
       });
@@ -96,11 +91,7 @@ app.post("/generate-video", async (req, res) => {
       console.log("✅ Saved:", outputPath);
     }
 
-    if (clipPaths.length === 0) {
-      return res.status(400).json({ error: "No clips downloaded" });
-    }
-
-    // 🧩 Create concat file
+    // 🧩 STEP 3: CREATE CONCAT FILE
     const listPath = path.join(TEMP_DIR, "videos.txt");
 
     const fileList = clipPaths
@@ -111,16 +102,17 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("📄 videos.txt created");
 
-    // 🎞 FFmpeg
+    // 🎞 STEP 4: FFMPEG (WITH CAPTIONS 🔥)
     const outputVideo = path.join(TEMP_DIR, "final.mp4");
 
-    const ffmpegCmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -vf "scale=720:1280,format=yuv420p" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k "${outputVideo}"`;
+    const ffmpegCmd = `ffmpeg -y -f concat -safe 0 -i "${listPath}" -vf "scale=720:1280,format=yuv420p,drawtext=text='${safeCaption}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.5:boxborderw=10:x=(w-text_w)/2:y=h-200" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k "${outputVideo}"`;
 
     console.log("🎬 Running ffmpeg...");
     execSync(ffmpegCmd);
 
     console.log("✅ FINAL VIDEO READY");
 
+    // 🌍 STEP 5: RETURN VIDEO URL
     const videoUrl = `${req.protocol}://${req.get("host")}/final.mp4`;
 
     res.json({ video: videoUrl });
@@ -131,7 +123,7 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// 📡 Serve video
+// 📡 SERVE VIDEO
 app.get("/final.mp4", (req, res) => {
   const filePath = path.join(TEMP_DIR, "final.mp4");
 
@@ -142,7 +134,7 @@ app.get("/final.mp4", (req, res) => {
   res.sendFile(path.resolve(filePath));
 });
 
-// 🚀 Start server
+// 🚀 START SERVER
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
