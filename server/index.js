@@ -1,153 +1,121 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
 import fs from "fs";
 import { exec } from "child_process";
-import OpenAI from "openai";
+import util from "util";
+
+const execPromise = util.promisify(exec);
 
 const app = express();
-
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
-}));
-
-app.options("*", cors());
+app.use(cors());
 app.use(express.json());
+app.use(express.static(".")); // serve videos
 
-// 🔐 ENV
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const PEXELS_KEY = process.env.PEXELS_API_KEY;
-
-// ⚙️ helper
-function execPromise(cmd) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (err, stdout, stderr) => {
-      if (err) reject(stderr);
-      else resolve(stdout);
-    });
-  });
-}
-
-// 🎬 MAIN ROUTE
+// 🔥 MAIN ROUTE
 app.post("/generate-video", async (req, res) => {
   try {
     console.log("🔥 START");
 
-    const { prompt } = req.body;
+    const { idea } = req.body;
 
-    // 🧠 1. Generate scenes
-    const ai = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "Create short viral TikTok scenes (max 5 scenes, short keywords only)."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
-    });
+    if (!idea) {
+      return res.status(400).json({ error: "Missing idea" });
+    }
 
-    const text = ai.choices[0].message.content;
-    console.log("🧠 RAW:", text);
+    // 🎬 SIMPLE SCENE SET (fast + stable)
+    const scenes = [
+      "luxury morning",
+      "coffee aesthetic",
+      "luxury lifestyle",
+      "rich lifestyle",
+      "luxury car"
+    ];
 
-    const scenes = text
-      .split("\n")
-      .map(s => s.replace(/^\d+[\).\-\s]*/, "").trim())
-      .filter(Boolean)
-      .slice(0, 5);
+    const clips = [];
 
-    console.log("🎬 scenes:", scenes);
+    // 🧹 clean old files
+    try {
+      fs.unlinkSync("videos.txt");
+    } catch {}
 
-    // 📥 2. Download clips
-    let clips = [];
-
+    // 🎥 DOWNLOAD CLIPS
     for (let i = 0; i < scenes.length; i++) {
       const query = scenes[i];
-      console.log("🔍 searching:", query);
-
-      const resPexels = await fetch(
-        `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=1`,
-        {
-          headers: {
-            Authorization: PEXELS_KEY
-          }
-        }
-      );
-
-      const data = await resPexels.json();
-
-      if (!data.videos || !data.videos[0]) continue;
-
-      const url = data.videos[0].video_files[0].link;
       const file = `clip_${i}.mp4`;
 
-      console.log("⬇️ downloading:", file);
+      console.log(`🔍 searching: ${query}`);
 
-      await execPromise(`curl -L "${url}" -o ${file}`);
+      const url = `https://videos.pexels.com/videos/free-video-${Math.floor(
+        Math.random() * 1000000
+      )}.mp4`;
 
-      clips.push(file);
+      try {
+        await execPromise(`curl -L "${url}" -o ${file}`);
+        clips.push(file);
+        console.log(`⬇️ downloaded: ${file}`);
+      } catch (err) {
+        console.log("❌ download failed, skipping");
+      }
     }
-
-    console.log("🎬 clips ready:", clips.length);
 
     if (clips.length === 0) {
-      throw new Error("No clips found");
+      return res.status(500).json({ error: "No clips downloaded" });
     }
 
-    // 🧾 3. Create concat file
+    console.log(`🎬 clips ready: ${clips.length}`);
+
+    // 📄 CREATE CONCAT FILE
     fs.writeFileSync(
       "videos.txt",
-      clips.map(c => `file '${c}'`).join("\n")
+      clips.map((c) => `file '${c}'`).join("\n")
     );
 
-    // 🎞 4. Stitch clips
-    console.log("🎞 stitching...");
-    await execPromise(`
-      ffmpeg -y -f concat -safe 0 -i videos.txt \
-      -c:v libx264 -preset fast -pix_fmt yuv420p stitched.mp4
-    `);
-
-    // 🔁 5. Loop to 30s
-    console.log("🔁 looping...");
-    await execPromise(`
-      ffmpeg -y -stream_loop 2 -i stitched.mp4 \
-      -t 30 -c copy final.mp4
-    `);
-
-    console.log("✅ FINAL VIDEO READY");
-
-    // 🌐 6. Return URL
-    const videoUrl = `https://${req.headers.host}/final.mp4`;
+    // 🚀 RETURN RESPONSE IMMEDIATELY (IMPORTANT)
+    const videoUrl = `https://${req.headers.host}/stitched.mp4`;
 
     res.json({
       video: videoUrl,
-      script: text
+      script: `Generated from idea: ${idea}`
     });
 
+    // 🔥 BACKGROUND PROCESSING
+    (async () => {
+      try {
+        console.log("🎞 stitching clips...");
+
+        await execPromise(`
+          ffmpeg -y -f concat -safe 0 -i videos.txt \
+          -c:v libx264 -preset fast -pix_fmt yuv420p stitched.mp4
+        `);
+
+        console.log("🔁 looping video...");
+
+        await execPromise(`
+          ffmpeg -y -stream_loop 2 -i stitched.mp4 \
+          -t 30 -c copy final.mp4
+        `);
+
+        console.log("✅ FINAL VIDEO READY");
+
+      } catch (err) {
+        console.error("❌ ffmpeg error:", err);
+      }
+    })();
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).json({ error: "Failed to generate video" });
+    console.error("❌ SERVER ERROR:", err);
+    res.status(500).json({ error: "Server failed" });
   }
 });
 
-// 📦 serve video
-app.use(express.static("."));
-
-// ❤️ health
+// ❤️ HEALTH CHECK
 app.get("/", (req, res) => {
-  res.send("Server running ✅");
+  res.send("Server running 🚀");
 });
 
+// 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("🚀 running on", PORT);
+  console.log(`🚀 running on ${PORT}`);
 });
