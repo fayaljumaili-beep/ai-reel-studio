@@ -9,9 +9,15 @@ const execPromise = util.promisify(exec);
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(".")); // serve videos
+app.use(express.static("."));
 
-// 🔥 MAIN ROUTE
+// 🎬 REAL WORKING VIDEO SOURCES (IMPORTANT)
+const SAMPLE_CLIPS = [
+  "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+  "https://samplelib.com/lib/preview/mp4/sample-10s.mp4",
+  "https://samplelib.com/lib/preview/mp4/sample-15s.mp4"
+];
+
 app.post("/generate-video", async (req, res) => {
   try {
     console.log("🔥 START");
@@ -22,55 +28,43 @@ app.post("/generate-video", async (req, res) => {
       return res.status(400).json({ error: "Missing idea" });
     }
 
-    // 🎬 SIMPLE SCENE SET (fast + stable)
-    const scenes = [
-      "luxury morning",
-      "coffee aesthetic",
-      "luxury lifestyle",
-      "rich lifestyle",
-      "luxury car"
-    ];
-
     const clips = [];
 
-    // 🧹 clean old files
-    try {
-      fs.unlinkSync("videos.txt");
-    } catch {}
+    // 🧹 cleanup
+    try { fs.unlinkSync("videos.txt"); } catch {}
+    try { fs.unlinkSync("stitched.mp4"); } catch {}
+    try { fs.unlinkSync("final.mp4"); } catch {}
 
-    // 🎥 DOWNLOAD CLIPS
-    for (let i = 0; i < scenes.length; i++) {
-      const query = scenes[i];
+    // 📥 DOWNLOAD REAL CLIPS
+    for (let i = 0; i < SAMPLE_CLIPS.length; i++) {
       const file = `clip_${i}.mp4`;
 
-      console.log(`🔍 searching: ${query}`);
+      console.log(`⬇️ downloading: ${file}`);
 
-      const url = `https://videos.pexels.com/videos/free-video-${Math.floor(
-        Math.random() * 1000000
-      )}.mp4`;
+      await execPromise(`curl -L "${SAMPLE_CLIPS[i]}" -o ${file}`);
 
-      try {
-        await execPromise(`curl -L "${url}" -o ${file}`);
+      // ✅ VERIFY FILE EXISTS
+      if (fs.existsSync(file) && fs.statSync(file).size > 1000) {
         clips.push(file);
-        console.log(`⬇️ downloaded: ${file}`);
-      } catch (err) {
-        console.log("❌ download failed, skipping");
+        console.log(`✅ valid clip: ${file}`);
+      } else {
+        console.log(`❌ invalid clip skipped: ${file}`);
       }
     }
 
     if (clips.length === 0) {
-      return res.status(500).json({ error: "No clips downloaded" });
+      return res.status(500).json({ error: "No valid clips" });
     }
 
-    console.log(`🎬 clips ready: ${clips.length}`);
+    console.log("🎬 clips ready:", clips);
 
-    // 📄 CREATE CONCAT FILE
+    // 📄 CONCAT FILE
     fs.writeFileSync(
       "videos.txt",
       clips.map((c) => `file '${c}'`).join("\n")
     );
 
-    // 🚀 RETURN RESPONSE IMMEDIATELY (IMPORTANT)
+    // 🚀 RESPOND FAST
     const videoUrl = `https://${req.headers.host}/stitched.mp4`;
 
     res.json({
@@ -78,24 +72,24 @@ app.post("/generate-video", async (req, res) => {
       script: `Generated from idea: ${idea}`
     });
 
-    // 🔥 BACKGROUND PROCESSING
+    // 🎞 BACKGROUND PROCESSING
     (async () => {
       try {
-        console.log("🎞 stitching clips...");
+        console.log("🎞 stitching...");
 
         await execPromise(`
           ffmpeg -y -f concat -safe 0 -i videos.txt \
           -c:v libx264 -preset fast -pix_fmt yuv420p stitched.mp4
         `);
 
-        console.log("🔁 looping video...");
+        console.log("🔁 looping...");
 
         await execPromise(`
-          ffmpeg -y -stream_loop 2 -i stitched.mp4 \
-          -t 30 -c copy final.mp4
+          ffmpeg -y -stream_loop 1 -i stitched.mp4 \
+          -t 20 -c copy final.mp4
         `);
 
-        console.log("✅ FINAL VIDEO READY");
+        console.log("✅ FINAL READY");
 
       } catch (err) {
         console.error("❌ ffmpeg error:", err);
@@ -108,12 +102,11 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// ❤️ HEALTH CHECK
+// ❤️ health
 app.get("/", (req, res) => {
   res.send("Server running 🚀");
 });
 
-// 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
