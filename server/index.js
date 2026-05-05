@@ -9,8 +9,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// ✅ CRITICAL FIXES (CORS + BODY PARSING)
+app.use(cors({ origin: "*" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 8080;
 
@@ -23,9 +26,11 @@ if (!fs.existsSync(TEMP_DIR)) {
 // 🔥 MAIN ENDPOINT
 app.post("/generate-video", async (req, res) => {
   try {
+    // 🧪 DEBUG LOG (IMPORTANT)
+    console.log("BODY:", req.body);
+
     const { idea } = req.body;
 
-    // ✅ FIXED INPUT CHECK
     if (!idea) {
       console.log("❌ No idea provided");
       return res.status(400).json({ error: "No idea provided" });
@@ -33,7 +38,7 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", idea);
 
-    // 🧠 STEP 1: Search Pexels videos
+    // 🎯 STEP 1: Fetch videos from Pexels
     const searchRes = await axios.get(
       `https://api.pexels.com/videos/search?query=${encodeURIComponent(
         idea
