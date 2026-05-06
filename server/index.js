@@ -40,7 +40,16 @@ Your future depends on it.
     console.log("🧠 Script ready");
 
     // -------------------------
-    // 2. VOICE (ElevenLabs)
+    // 2. SAFE TEXT FOR CAPTIONS
+    // -------------------------
+    const safeText = script
+      .replace(/:/g, "")
+      .replace(/'/g, "")
+      .replace(/"/g, "")
+      .replace(/\n/g, " ");
+
+    // -------------------------
+    // 3. VOICE (ElevenLabs)
     // -------------------------
     const voiceRes = await axios.post(
       "https://api.elevenlabs.io/v1/text-to-speech/dPah2VEoifKnZT37774q",
@@ -66,7 +75,7 @@ Your future depends on it.
     console.log("🎤 Voice ready");
 
     // -------------------------
-    // 3. GET 1 SMALL VIDEO (FAST)
+    // 4. GET 1 SMALL VIDEO
     // -------------------------
     const clipsRes = await axios.get(
       `https://api.pexels.com/videos/search?query=${idea}&per_page=1`,
@@ -95,7 +104,7 @@ Your future depends on it.
     console.log("🎬 Clip downloaded");
 
     // -------------------------
-    // 4. MERGE VIDEO + VOICE
+    // 5. MERGE VIDEO + VOICE + CAPTIONS
     // -------------------------
     const outputPath = `${TEMP_DIR}/final.mp4`;
 
@@ -106,7 +115,7 @@ Your future depends on it.
       -map 0:v:0 \
       -map 1:a:0 \
       -shortest \
-      -vf "scale=720:-2" \
+      -vf "scale=720:-2,drawtext=text='${safeText}':fontcolor=white:fontsize=40:borderw=2:bordercolor=black:x=(w-text_w)/2:y=h-120" \
       -preset ultrafast \
       -crf 32 \
       -c:v libx264 \
@@ -117,7 +126,7 @@ Your future depends on it.
     console.log("✅ FINAL VIDEO READY");
 
     // -------------------------
-    // 5. RETURN VIDEO
+    // 6. RETURN VIDEO
     // -------------------------
     const videoFile = fs.readFileSync(outputPath);
 
