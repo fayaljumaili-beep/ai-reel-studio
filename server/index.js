@@ -37,8 +37,7 @@ app.post("/generate-video", async (req, res) => {
     // ------------------------
     // 2. VOICE (ElevenLabs)
     // ------------------------
-    const voiceRes = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${dPah2VEoifKnZT37774q}`,
+    const voiceRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
       {
         method: "POST",
         headers: {
