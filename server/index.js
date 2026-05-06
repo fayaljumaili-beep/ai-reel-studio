@@ -37,19 +37,20 @@ app.post("/generate-video", async (req, res) => {
     // ------------------------
     // 2. VOICE (ElevenLabs)
     // ------------------------
-    const voiceRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: script,
-          model_id: "eleven_monolingual_v1",
-        }),
-      }
-    );
+    const voiceRes = await fetch(
+  `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+  {
+    method: "POST",
+    headers: {
+      "xi-api-key": ELEVENLABS_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text: script,
+      model_id: "eleven_monolingual_v1"
+    })
+  }
+);
 
     const voiceBuffer = await voiceRes.arrayBuffer();
     fs.writeFileSync("voice.mp3", Buffer.from(voiceBuffer));
