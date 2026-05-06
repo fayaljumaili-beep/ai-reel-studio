@@ -197,7 +197,7 @@ CREATE BIG DREAMS
     execSync(`
     ffmpeg -y \
     -i temp.mp4 \
-    -stream_loop -1 -i music.mp3 \
+    -stream_loop -1 -i server/music.mp3 \
     -filter_complex "[1:a]volume=0.08[a1]" \
     -map 0:v \
     -map "[a1]" \
