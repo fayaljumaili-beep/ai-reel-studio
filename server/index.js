@@ -54,7 +54,7 @@ Keep going even when it hurts.
 `;
 
     // =========================
-    // WORD-BY-WORD CAPTIONS
+    // ANIMATED CAPTIONS
     // =========================
 
     const captions = [
@@ -98,7 +98,7 @@ Keep going even when it hurts.
     console.log("🎤 Voice ready");
 
     // =========================
-    // PEXELS VIDEOS
+    // GET PEXELS VIDEOS
     // =========================
 
     const pexels = await axios.get(
@@ -182,7 +182,7 @@ combined.mp4
     console.log("📦 Clips combined");
 
     // =========================
-    // PREMIUM ANIMATED CAPTIONS
+    // PREMIUM CAPTIONS
     // =========================
 
     const drawtexts = captions
@@ -205,16 +205,18 @@ enable='between(t,${caption.start},${caption.end})'
       .join(",");
 
     // =========================
-    // FINAL VIDEO
+    // FINAL VIDEO + MUSIC MIX
     // =========================
 
     execSync(`
 ffmpeg -y \
 -i combined.mp4 \
 -i voice.mp3 \
+-i music.mp3 \
+-filter_complex "[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[audio]" \
 -vf "${drawtexts}" \
 -map 0:v \
--map 1:a \
+-map "[audio]" \
 -shortest \
 -r 24 \
 -s 720x1280 \
