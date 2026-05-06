@@ -1,11 +1,8 @@
 import express from "express";
 import cors from "cors";
+import fetch from "node-fetch";
 import fs from "fs";
-import axios from "axios";
 import { exec } from "child_process";
-import util from "util";
-
-const execPromise = util.promisify(exec);
 
 const app = express();
 app.use(cors());
@@ -13,133 +10,110 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-const TEMP_DIR = "./temp";
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
+// 🔐 ENV KEYS
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const VOICE_ID = process.env.ELEVENLABS_VOICE_ID; // put your voice id
 
-// 🔥 MAIN ENDPOINT
+// helper
+const run = (cmd) =>
+  new Promise((resolve, reject) => {
+    exec(cmd, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
 app.post("/generate-video", async (req, res) => {
   try {
     const { idea } = req.body;
     console.log("🔥 START:", idea);
 
-    // -------------------------
-    // 1. VIRAL SCRIPT
-    // -------------------------
-    const script = `
-If you want ${idea}, listen carefully.
+    // ------------------------
+    // 1. SCRIPT (simple for now)
+    // ------------------------
+    const script = `If you want success, listen carefully. Start small. Stay consistent. This is how you win.`;
 
-Most people get this wrong.
-
-Start small. Stay consistent.
-
-And never quit.
-
-Your future depends on it.
-`;
-
-    console.log("🧠 Script ready");
-
-    // -------------------------
-    // 2. SAFE TEXT FOR CAPTIONS
-    // -------------------------
-    const safeText = script
-      .replace(/:/g, "")
-      .replace(/'/g, "")
-      .replace(/"/g, "")
-      .replace(/\n/g, " ");
-
-    // -------------------------
-    // 3. VOICE (ElevenLabs)
-    // -------------------------
-    const voiceRes = await axios.post(
-      "https://api.elevenlabs.io/v1/text-to-speech/dPah2VEoifKnZT37774q",
+    // ------------------------
+    // 2. VOICE (ElevenLabs)
+    // ------------------------
+    const voiceRes = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${dPah2VEoifKnZT37774q}`,
       {
-        text: script,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: {
-          stability: 0.4,
-          similarity_boost: 0.8
-        }
-      },
-      {
-        responseType: "arraybuffer",
+        method: "POST",
         headers: {
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json"
-        }
+          "xi-api-key": ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: script,
+          model_id: "eleven_monolingual_v1",
+        }),
       }
     );
 
-    const voicePath = `${TEMP_DIR}/voice.mp3`;
-    fs.writeFileSync(voicePath, voiceRes.data);
+    const voiceBuffer = await voiceRes.arrayBuffer();
+    fs.writeFileSync("voice.mp3", Buffer.from(voiceBuffer));
     console.log("🎤 Voice ready");
 
-    // -------------------------
-    // 4. GET 1 SMALL VIDEO
-    // -------------------------
-    const clipsRes = await axios.get(
-      `https://api.pexels.com/videos/search?query=${idea}&per_page=1`,
+    // ------------------------
+    // 3. GET VIDEO (PEXELS)
+    // ------------------------
+    const pexelsRes = await fetch(
+      `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
       {
         headers: {
-          Authorization: process.env.PEXELS_API_KEY
-        }
+          Authorization: PEXELS_API_KEY,
+        },
       }
     );
 
-    const video = clipsRes.data.videos[0];
+    const pexelsData = await pexelsRes.json();
+    const videos = pexelsData.videos;
 
+    if (!videos || videos.length === 0) {
+      throw new Error("No videos found");
+    }
+
+    // pick SMALL clip (important!)
     const file =
-      video.video_files.find(v => v.quality === "sd") ||
-      video.video_files[0];
+      videos[0].video_files.find((v) => v.quality === "sd") ||
+      videos[0].video_files[0];
 
     const videoUrl = file.link;
 
-    const videoPath = `${TEMP_DIR}/clip.mp4`;
-
-    const videoBuffer = await axios.get(videoUrl, {
-      responseType: "arraybuffer"
-    });
-
-    fs.writeFileSync(videoPath, videoBuffer.data);
+    const videoRes = await fetch(videoUrl);
+    const videoBuffer = await videoRes.arrayBuffer();
+    fs.writeFileSync("clip.mp4", Buffer.from(videoBuffer));
     console.log("🎬 Clip downloaded");
 
-    // -------------------------
-    // 5. MERGE VIDEO + VOICE + CAPTIONS
-    // -------------------------
-    const outputPath = `${TEMP_DIR}/final.mp4`;
+    // ------------------------
+    // 4. MERGE + CAPTIONS
+    // ------------------------
+    const cmd = `
+    ffmpeg -y -i clip.mp4 -i voice.mp3 \
+    -vf "scale=720:-2,
+    drawtext=text='IF YOU WANT SUCCESS':fontcolor=white:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300,
+    drawtext=text='LISTEN CAREFULLY':fontcolor=yellow:fontsize=65:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,2,4)',
+    drawtext=text='START SMALL':fontcolor=white:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-150:enable='between(t,4,6)',
+    drawtext=text='STAY CONSISTENT':fontcolor=yellow:fontsize=65:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-80:enable='between(t,6,8)'
+    " \
+    -map 0:v -map 1:a -shortest -c:v libx264 -c:a aac final.mp4
+    `;
 
-    await execPromise(`
-      ffmpeg -y \
-      -i ${videoPath} \
-      -i ${voicePath} \
-      -map 0:v:0 \
-      -map 1:a:0 \
-      -shortest \
-      -vf "scale=720:-2,drawtext=text='${safeText}':fontcolor=white:fontsize=40:borderw=2:bordercolor=black:x=(w-text_w)/2:y=h-120" \
-      -preset ultrafast \
-      -crf 32 \
-      -c:v libx264 \
-      -c:a aac \
-      ${outputPath}
-    `);
-
+    await run(cmd);
     console.log("✅ FINAL VIDEO READY");
 
-    // -------------------------
-    // 6. RETURN VIDEO
-    // -------------------------
-    const videoFile = fs.readFileSync(outputPath);
-
-    res.setHeader("Content-Type", "video/mp4");
-    res.send(videoFile);
-
+    // ------------------------
+    // 5. RETURN VIDEO
+    // ------------------------
+    res.sendFile(`${process.cwd()}/final.mp4`);
   } catch (err) {
-    console.error("❌ ERROR:", err.message);
-    res.status(500).json({ error: "Failed to generate video" });
+    console.error("❌ ERROR:", err);
+    res.status(500).send("Error generating video");
   }
 });
 
-// START SERVER
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("🚀 Server running on", PORT);
 });
