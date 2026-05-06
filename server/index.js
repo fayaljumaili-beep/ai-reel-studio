@@ -1,11 +1,10 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import fs from "fs";
-import { execSync } from "child_process";
-import axios from "axios";
+require("dotenv").config();
 
-dotenv.config();
+const express = require("express");
+const cors = require("cors");
+const fs = require("fs");
+const axios = require("axios");
+const { execSync } = require("child_process");
 
 const app = express();
 
@@ -14,204 +13,168 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
+/*
+========================================
+REAL ELEVENLABS VOICE ID
+========================================
+*/
+
+const VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
+
+/*
+========================================
+GENERATE VIDEO
+========================================
+*/
+
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     console.log("🔥 START:", prompt);
 
-    // -------------------------
-    // CLEAN OLD FILES
-    // -------------------------
-
-    const files = [
-      "voice.mp3",
-      "scene1.mp4",
-      "scene2.mp4",
-      "scene3.mp4",
-      "captions.srt",
-      "list.txt",
-      "temp.mp4",
-      "final.mp4"
-    ];
-
-    files.forEach((file) => {
-      if (fs.existsSync(file)) {
-        fs.unlinkSync(file);
-      }
-    });
-
-    // -------------------------
-    // GENERATE AI SCRIPT
-    // -------------------------
+    /*
+    ========================================
+    SCRIPT
+    ========================================
+    */
 
     const script = `
 Most people quit too early.
+
 Success comes from consistency.
-Keep showing up every day.
-Small actions create big dreams.
+
+Keep going even when it hurts.
+
+Small business big dreams.
+
+You can win if you want.
 `;
 
-    // -------------------------
-    // GENERATE VOICE
-    // -------------------------
+    /*
+    ========================================
+    ELEVENLABS VOICE
+    ========================================
+    */
 
-    const elevenRes = await axios({
+    const voiceResponse = await axios({
       method: "POST",
-      url: `https://api.elevenlabs.io/v1/text-to-speech/${process.env.VOICE_ID}`,
+      url: `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+
       headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
+        Accept: "audio/mpeg",
         "Content-Type": "application/json",
+        "xi-api-key": process.env.ELEVENLABS_API_KEY,
       },
+
       data: {
         text: script,
-        model_id: "eleven_multilingual_v2",
+        model_id: "eleven_monolingual_v1",
+
+        voice_settings: {
+          stability: 0.4,
+          similarity_boost: 0.8,
+        },
       },
+
       responseType: "arraybuffer",
     });
 
-    fs.writeFileSync("voice.mp3", elevenRes.data);
+    fs.writeFileSync("voice.mp3", voiceResponse.data);
 
     console.log("🎤 Voice ready");
 
-    // -------------------------
-    // DOWNLOAD VIDEOS
-    // -------------------------
-
-    const videos = [
-      "https://videos.pexels.com/video-files/3195650/3195650-hd_720_1280_25fps.mp4",
-      "https://videos.pexels.com/video-files/853889/853889-hd_720_1280_25fps.mp4",
-      "https://videos.pexels.com/video-files/4620573/4620573-hd_720_1280_30fps.mp4"
-    ];
-
-    for (let i = 0; i < videos.length; i++) {
-      const response = await axios({
-        method: "GET",
-        url: videos[i],
-        responseType: "stream",
-      });
-
-      const writer = fs.createWriteStream(`scene${i + 1}.mp4`);
-
-      response.data.pipe(writer);
-
-      await new Promise((resolve, reject) => {
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
-    }
-
-    console.log("🎬 Clips downloaded");
-
-    // -------------------------
-    // TRIM CLIPS
-    // -------------------------
-
-    for (let i = 1; i <= 3; i++) {
-      execSync(`
-      ffmpeg -y \
-      -i scene${i}.mp4 \
-      -t 5 \
-      -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
-      -preset ultrafast \
-      trimmed${i}.mp4
-      `);
-    }
-
-    // -------------------------
-    // CONCAT VIDEO
-    // -------------------------
-
-    fs.writeFileSync(
-      "list.txt",
-      `
-file 'trimmed1.mp4'
-file 'trimmed2.mp4'
-file 'trimmed3.mp4'
-`
-    );
-
-    execSync(`
-    ffmpeg -y \
-    -f concat \
-    -safe 0 \
-    -i list.txt \
-    -c copy \
-    combined.mp4
-    `);
-
-    console.log("🎞 Clips combined");
-
-    // -------------------------
-    // CAPTIONS
-    // -------------------------
+    /*
+    ========================================
+    CAPTIONS
+    ========================================
+    */
 
     const captions = `
 1
-00:00:00,000 --> 00:00:03,000
+00:00:00,000 --> 00:00:02,000
 MOST PEOPLE
 QUIT TOO EARLY
 
 2
-00:00:03,000 --> 00:00:06,000
+00:00:02,000 --> 00:00:04,000
 SUCCESS COMES
 FROM CONSISTENCY
 
 3
-00:00:06,000 --> 00:00:09,000
-KEEP SHOWING UP
-EVERY DAY
+00:00:04,000 --> 00:00:06,000
+KEEP GOING
+EVEN WHEN IT HURTS
 
 4
-00:00:09,000 --> 00:00:12,000
-SMALL ACTIONS
-CREATE BIG DREAMS
+00:00:06,000 --> 00:00:08,000
+SMALL BUSINESS
+BIG DREAMS
+
+5
+00:00:08,000 --> 00:00:10,000
+YOU CAN WIN
+IF YOU WANT
 `;
 
     fs.writeFileSync("captions.srt", captions);
 
-    // -------------------------
-    // VIDEO + VOICE + CAPTIONS
-    // -------------------------
+    /*
+    ========================================
+    BACKGROUND MUSIC CHECK
+    ========================================
+    */
 
-    execSync(`
-    ffmpeg -y \
-    -i combined.mp4 \
-    -i voice.mp3 \
-    -vf "subtitles=captions.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=3,Outline=2,Shadow=1,Alignment=2,MarginV=90'" \
-    -map 0:v \
-    -map 1:a \
-    -c:v libx264 \
-    -preset ultrafast \
-    -c:a aac \
-    -shortest \
-    temp.mp4
-    `);
+    const hasMusic = fs.existsSync("server/music.mp3");
 
-    console.log("📝 Captions added");
+    console.log("🎵 Music exists:", hasMusic);
 
-    // -------------------------
-    // ADD BACKGROUND MUSIC
-    // -------------------------
+    /*
+    ========================================
+    CREATE VIDEO
+    ========================================
+    */
 
-    execSync(`
-    ffmpeg -y \
-    -i temp.mp4 \
-    -stream_loop -1 -i server/music.mp3 \
-    -filter_complex "[1:a]volume=0.08[a1]" \
-    -map 0:v \
-    -map "[a1]" \
-    -c:v copy \
-    -shortest \
-    final.mp4
-    `);
-
-    console.log("🎵 Music added");
+    if (hasMusic) {
+      execSync(`
+ffmpeg -y \
+-loop 1 -i sample.jpg \
+-i voice.mp3 \
+-stream_loop -1 -i server/music.mp3 \
+-filter_complex "
+[0:v]scale=1080:1920,zoompan=z='min(zoom+0.0005,1.1)':d=250:s=1080x1920[v];
+[1:a]volume=1.5[a1];
+[2:a]volume=0.15[a2];
+[a1][a2]amix=inputs=2:duration=first[a]
+" \
+-map "[v]" \
+-map "[a]" \
+-vf "subtitles=captions.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=4,Outline=2,Shadow=1,MarginV=180,Alignment=2'" \
+-c:v libx264 \
+-preset ultrafast \
+-crf 32 \
+-c:a aac \
+-shortest \
+final.mp4
+`);
+    } else {
+      execSync(`
+ffmpeg -y \
+-loop 1 -i sample.jpg \
+-i voice.mp3 \
+-vf "scale=1080:1920,subtitles=captions.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=4,Outline=2,Shadow=1,MarginV=180,Alignment=2'" \
+-c:v libx264 \
+-preset ultrafast \
+-crf 32 \
+-c:a aac \
+-shortest \
+final.mp4
+`);
+    }
 
     console.log("✅ FINAL VIDEO READY");
 
     res.sendFile(process.cwd() + "/final.mp4");
-
   } catch (err) {
     console.error(err);
 
@@ -221,6 +184,12 @@ CREATE BIG DREAMS
     });
   }
 });
+
+/*
+========================================
+START SERVER
+========================================
+*/
 
 app.listen(PORT, () => {
   console.log("🚀 Server running on", PORT);
