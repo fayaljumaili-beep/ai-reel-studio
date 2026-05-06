@@ -1,11 +1,11 @@
-const express = require("express");
-const cors = require("cors");
-const axios = require("axios");
-const fs = require("fs");
-const { execSync } = require("child_process");
-const OpenAI = require("openai");
+import express from "express";
+import cors from "cors";
+import fs from "fs";
+import axios from "axios";
+import { execSync } from "child_process";
+import dotenv from "dotenv";
 
-require("dotenv").config();
+dotenv.config();
 
 const app = express();
 
@@ -14,12 +14,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 app.get("/", (req, res) => {
-  res.send("AI Reel Generator Backend Running");
+  res.send("AI Reel Generator Running");
 });
 
 app.post("/generate-video", async (req, res) => {
@@ -28,240 +24,202 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", prompt);
 
-    // =========================
     // CLEAN OLD FILES
-    // =========================
-
-    const filesToDelete = [
+    [
       "voice.mp3",
-      "combined.mp4",
-      "final.mp4",
-      "list.txt",
-      "temp0.mp4",
-      "temp1.mp4",
-      "temp2.mp4",
-      "temp3.mp4",
-      "temp4.mp4",
-      "temp5.mp4",
-      "clip0.mp4",
       "clip1.mp4",
       "clip2.mp4",
       "clip3.mp4",
-      "clip4.mp4",
-      "clip5.mp4",
+      "combined.mp4",
+      "final.mp4",
+      "list.txt"
+    ].forEach((f) => {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    });
+
+    // =========================
+    // 1. GENERATE SCRIPT
+    // =========================
+
+    const script = `
+Success is built daily.
+Most people quit too early.
+Discipline changes everything.
+Keep going even when it hurts.
+`;
+
+    const captions = [
+      "SUCCESS IS BUILT DAILY",
+      "MOST PEOPLE QUIT TOO EARLY",
+      "DISCIPLINE CHANGES EVERYTHING",
+      "KEEP GOING EVEN WHEN IT HURTS"
     ];
 
-    filesToDelete.forEach((file) => {
-      if (fs.existsSync(file)) {
-        fs.unlinkSync(file);
-      }
-    });
-
     // =========================
-    // AI SCRIPT GENERATION
+    // 2. ELEVENLABS VOICE
     // =========================
 
-    console.log("🧠 Generating AI script");
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You create short viral motivational TikTok reel scripts. Keep them emotional, punchy, cinematic, and easy to caption.",
-        },
-        {
-          role: "user",
-          content: `Create a viral reel script about: ${prompt}`,
-        },
-      ],
-    });
-
-    const script = completion.choices[0].message.content;
-
-    console.log("📝 Script:");
-    console.log(script);
-
-    // =========================
-    // ELEVENLABS VOICE
-    // =========================
-
-    console.log("🎤 Generating voice");
-
-    const voice = await axios({
+    const voiceResponse = await axios({
       method: "POST",
       url: `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
       headers: {
         "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       responseType: "arraybuffer",
       data: {
         text: script,
-        model_id: "eleven_multilingual_v2",
-      },
+        model_id: "eleven_multilingual_v2"
+      }
     });
 
-    fs.writeFileSync("voice.mp3", voice.data);
+    fs.writeFileSync("voice.mp3", voiceResponse.data);
 
-    console.log("✅ Voice ready");
+    console.log("🎤 Voice ready");
 
     // =========================
-    // SEARCH VIDEOS
+    // 3. DOWNLOAD PEXELS CLIPS
     // =========================
 
-    console.log("🔍 Searching clips");
-
-    const search = await axios.get(
-      `https://api.pexels.com/videos/search?query=${prompt}&per_page=6`,
+    const pexels = await axios.get(
+      `https://api.pexels.com/videos/search?query=${prompt}&per_page=3`,
       {
         headers: {
-          Authorization: process.env.PEXELS_API_KEY,
-        },
+          Authorization: process.env.PEXELS_API_KEY
+        }
       }
     );
 
-    const videos = search.data.videos;
+    const videos = pexels.data.videos;
 
     if (!videos.length) {
-      return res.status(500).json({
-        error: "No clips found",
+      return res.status(400).json({
+        error: "No videos found"
       });
     }
 
-    // =========================
-    // DOWNLOAD + TRIM CLIPS
-    // =========================
-
-    const selectedVideos = videos.slice(0, 6);
-
-    for (let i = 0; i < selectedVideos.length; i++) {
-      const videoUrl = selectedVideos[i].video_files[0].link;
-
-      console.log(`⬇️ Downloading clip ${i}`);
+    for (let i = 0; i < 3; i++) {
+      const videoUrl = videos[i].video_files[0].link;
 
       const response = await axios({
-        method: "GET",
         url: videoUrl,
-        responseType: "stream",
+        method: "GET",
+        responseType: "stream"
       });
 
-      const tempFile = `temp${i}.mp4`;
-      const outputFile = `clip${i}.mp4`;
-
-      const writer = fs.createWriteStream(tempFile);
+      const writer = fs.createWriteStream(`clip${i + 1}.mp4`);
 
       response.data.pipe(writer);
 
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         writer.on("finish", resolve);
+        writer.on("error", reject);
       });
 
-      // TRIM + VERTICAL FORMAT
-
+      // TRIM EACH CLIP TO 5 SEC
       execSync(`
-        ffmpeg -y \
-        -i ${tempFile} \
-        -t 5 \
-        -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
-        -preset ultrafast \
-        ${outputFile}
-      `);
+ffmpeg -y \
+-i clip${i + 1}.mp4 \
+-t 5 \
+-r 24 \
+-s 720x1280 \
+-c:v libx264 \
+-preset ultrafast \
+-crf 32 \
+clip${i + 1}_trim.mp4
+`);
 
-      fs.unlinkSync(tempFile);
+      fs.renameSync(`clip${i + 1}_trim.mp4`, `clip${i + 1}.mp4`);
     }
 
-    console.log("✅ Clips downloaded + trimmed");
+    console.log("📎 Clips downloaded + trimmed");
 
     // =========================
-    // CONCAT CLIPS
+    // 4. COMBINE CLIPS
     // =========================
 
-    let list = "";
-
-    for (let i = 0; i < selectedVideos.length; i++) {
-      list += `file 'clip${i}.mp4'\n`;
-    }
-
-    fs.writeFileSync("list.txt", list);
+    fs.writeFileSync(
+      "list.txt",
+      `
+file 'clip1.mp4'
+file 'clip2.mp4'
+file 'clip3.mp4'
+`
+    );
 
     execSync(`
-      ffmpeg -y \
-      -f concat \
-      -safe 0 \
-      -i list.txt \
-      -c copy \
-      combined.mp4
-    `);
+ffmpeg -y \
+-f concat \
+-safe 0 \
+-i list.txt \
+-c copy \
+combined.mp4
+`);
 
-    console.log("✅ Clips combined");
-
-    // =========================
-    // CAPTION SETUP
-    // =========================
-
-    const lines = script
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      .slice(0, 5);
-
-    let captionFilters = "";
-
-    lines.forEach((line, index) => {
-      const start = index * 5;
-      const end = start + 5;
-
-      captionFilters += `drawtext=text='${line
-        .replace(/'/g, "")
-        .replace(/:/g, "")
-        .replace(/,/g, "")}':fontcolor=yellow:fontsize=48:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,${start},${end})',`;
-    });
-
-    captionFilters = captionFilters.slice(0, -1);
+    console.log("📦 Clips combined");
 
     // =========================
-    // FINAL VIDEO
+    // 5. PREMIUM CAPTIONS
     // =========================
 
-    console.log("🎞️ Rendering final video");
+    const drawtexts = captions
+      .map((text, i) => {
+        const start = i * 3;
+        const end = start + 3;
+
+        return `
+drawtext=
+text='${text}':
+fontcolor=yellow:
+fontsize=52:
+borderw=5:
+bordercolor=black:
+box=1:
+boxcolor=black@0.45:
+boxborderw=20:
+x=(w-text_w)/2:
+y=h-th-300:
+enable='between(t,${start},${end})'
+`;
+      })
+      .join(",");
+
+    // =========================
+    // 6. FINAL VIDEO
+    // =========================
 
     execSync(`
-      ffmpeg -y \
-      -i combined.mp4 \
-      -i voice.mp3 \
-      -vf "${captionFilters}" \
-      -map 0:v \
-      -map 1:a \
-      -shortest \
-      -preset ultrafast \
-      -crf 32 \
-      -s 720x1280 \
-      -r 24 \
-      -c:v libx264 \
-      -c:a aac \
-      -b:a 128k \
-      final.mp4
-    `);
+ffmpeg -y \
+-i combined.mp4 \
+-i voice.mp3 \
+-vf "${drawtexts}" \
+-map 0:v \
+-map 1:a \
+-shortest \
+-r 24 \
+-s 720x1280 \
+-c:v libx264 \
+-preset ultrafast \
+-crf 32 \
+-c:a aac \
+-b:a 128k \
+final.mp4
+`);
 
     console.log("✅ FINAL VIDEO READY");
 
-    const videoBuffer = fs.readFileSync("final.mp4");
-
-    res.setHeader("Content-Type", "video/mp4");
-
-    res.send(videoBuffer);
+    res.sendFile(process.cwd() + "/final.mp4");
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
+    console.error(err);
 
     res.status(500).json({
-      error: "Failed to generate video",
-      details: err.message,
+      error: "Video generation failed",
+      details: err.message
     });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on ${PORT}`);
+  console.log("🚀 Server running on", PORT);
 });
