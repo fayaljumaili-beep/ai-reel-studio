@@ -24,13 +24,13 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", prompt);
 
-    // -----------------------------
+    // -----------------------------------
     // ELEVENLABS VOICE GENERATION
-    // -----------------------------
+    // -----------------------------------
 
-    const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Bella voice
+    const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 
-    const response = await axios({
+    const voiceResponse = await axios({
       method: "POST",
       url: `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       headers: {
@@ -49,34 +49,34 @@ app.post("/generate-video", async (req, res) => {
       },
     });
 
-    fs.writeFileSync("voice.mp3", response.data);
+    fs.writeFileSync("voice.mp3", voiceResponse.data);
 
     console.log("🎤 Voice ready");
 
-    // -----------------------------
+    // -----------------------------------
     // CHECK FILES
-    // -----------------------------
+    // -----------------------------------
 
     if (!fs.existsSync("sample.jpg")) {
       throw new Error("sample.jpg missing");
     }
 
-    if (!fs.existsSync("music.mp3")) {
-      throw new Error("music.mp3 missing");
+    if (!fs.existsSync("server/music.mp3")) {
+      throw new Error("server/music.mp3 missing");
     }
 
-    console.log("🎵 Music exists");
     console.log("🖼️ Image exists");
+    console.log("🎵 Music exists");
 
-    // -----------------------------
-    // VIDEO GENERATION
-    // -----------------------------
+    // -----------------------------------
+    // GENERATE VIDEO
+    // -----------------------------------
 
     execSync(`
 ffmpeg -y \
 -loop 1 -i sample.jpg \
 -i voice.mp3 \
--stream_loop -1 -i music.mp3 \
+-stream_loop -1 -i server/music.mp3 \
 -filter_complex "
 [0:v]scale=1080:1920,format=yuv420p[v];
 [1:a]volume=1[a1];
