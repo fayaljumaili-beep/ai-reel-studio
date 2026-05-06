@@ -30,19 +30,12 @@ app.post("/generate-video", async (req, res) => {
     console.log("🔥 START:", idea);
 
     // ----------------------
-    // 1. LONGER SCRIPT
+    // 1. SCRIPT (longer)
     // ----------------------
-    const script = `
-If you want success, listen carefully.
-Start small.
-Stay consistent.
-Most people quit too early.
-But winners keep going.
-This is how you build real success.
-`;
+    const script = `If you want success, listen carefully. Start small. Stay consistent. Most people quit too early. The difference between winners and losers is discipline. Keep going even when it's hard. Success is built daily.`;
 
     // ----------------------
-    // 2. VOICE
+    // 2. VOICE (ElevenLabs)
     // ----------------------
     const voiceRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -66,77 +59,86 @@ This is how you build real success.
     // ----------------------
     // 3. GET MULTIPLE CLIPS
     // ----------------------
-    const pexelsRes = await fetch(
+    const searchRes = await fetch(
       `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
       {
-        headers: { Authorization: PEXELS_API_KEY },
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
       }
     );
 
-    const pexelsData = await pexelsRes.json();
+    const data = await searchRes.json();
+    const videos = data.videos.slice(0, 3);
 
-    let clips = [];
+    let clipFiles = [];
 
-    for (let i = 0; i < 3; i++) {
-      const video = pexelsData.videos[i];
-
+    for (let i = 0; i < videos.length; i++) {
       const file =
-        video.video_files.find((v) => v.quality === "sd") ||
-        video.video_files[0];
+        videos[i].video_files.find((v) => v.quality === "sd") ||
+        videos[i].video_files[0];
 
-      const videoUrl = file.link;
-
-      const videoRes = await fetch(videoUrl);
-      const videoBuffer = await videoRes.arrayBuffer();
+      const url = file.link;
+      const resClip = await fetch(url);
+      const buffer = await resClip.arrayBuffer();
 
       const filename = `clip${i}.mp4`;
-      fs.writeFileSync(filename, Buffer.from(videoBuffer));
-
-      clips.push(filename);
+      fs.writeFileSync(filename, Buffer.from(buffer));
+      clipFiles.push(filename);
     }
 
-    console.log("🎬 Clips downloaded");
+    console.log("🎬 Clips downloaded:", clipFiles.length);
 
     // ----------------------
     // 4. CONCAT CLIPS
     // ----------------------
-    const concatList = clips.map((c) => `file '${c}'`).join("\n");
-    fs.writeFileSync("list.txt", concatList);
+    fs.writeFileSync(
+      "list.txt",
+      clipFiles.map((c) => `file '${c}'`).join("\n")
+    );
 
-    await run(`ffmpeg -y -f concat -safe 0 -i list.txt -c copy stitched.mp4`);
+    await run(
+      "ffmpeg -y -f concat -safe 0 -i list.txt -c copy combined.mp4"
+    );
+
+    console.log("🔗 Clips combined");
 
     // ----------------------
     // 5. GET AUDIO DURATION
     // ----------------------
-    await run(
-      `ffprobe -i voice.mp3 -show_entries format=duration -v quiet -of csv="p=0" > duration.txt`
-    );
-
-    const duration = parseFloat(
-      fs.readFileSync("duration.txt", "utf-8")
-    );
+    const duration = script.split(" ").length * 0.45;
 
     // ----------------------
-    // 6. INSANE CAPTIONS
+    // 6. TIKTOK CAPTIONS
     // ----------------------
-    const cleanScript = script.replace(/\n/g, " ");
-    const words = cleanScript.split(" ");
-    const wordDuration = duration / words.length;
+    const words = script.split(" ");
+    const chunkSize = 3;
+    let chunks = [];
+
+    for (let i = 0; i < words.length; i += chunkSize) {
+      chunks.push(words.slice(i, i + chunkSize).join(" "));
+    }
+
+    const chunkDuration = duration / chunks.length;
 
     let filters = [];
 
-    words.forEach((word, i) => {
-      const start = i * wordDuration;
-      const end = start + wordDuration;
+    chunks.forEach((chunk, i) => {
+      const start = i * chunkDuration;
+      const end = start + chunkDuration;
 
-      // full sentence
+      const safe = chunk.replace(/:/g, "\\:").replace(/'/g, "\\'");
+
+      // main text
       filters.push(
-        `drawtext=text='${cleanScript}':fontcolor=white:fontsize=40:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,${start},${end})'`
+        `drawtext=text='${safe}':fontcolor=white:fontsize=48:borderw=4:bordercolor=black:x=(w-text_w)/2:y=(h/2):enable='between(t,${start},${end})'`
       );
 
-      // highlighted word
+      // highlight last word
+      const lastWord = chunk.split(" ").slice(-1)[0];
+
       filters.push(
-        `drawtext=text='${word}':fontcolor=yellow:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-150:enable='between(t,${start},${end})'`
+        `drawtext=text='${lastWord}':fontcolor=yellow:fontsize=60:borderw=5:bordercolor=black:x=(w-text_w)/2:y=(h/2)+60:enable='between(t,${start},${end})'`
       );
     });
 
@@ -145,24 +147,23 @@ This is how you build real success.
     // ----------------------
     // 7. FINAL VIDEO
     // ----------------------
-    await run(`
-      ffmpeg -y -i stitched.mp4 -i voice.mp3 \
-      -vf "${filterComplex}" \
-      -c:v libx264 -c:a aac -shortest output.mp4
-    `);
+    await run(
+      `ffmpeg -y -i combined.mp4 -i voice.mp3 -vf "${filterComplex}" -map 0:v -map 1:a -shortest output.mp4`
+    );
 
     console.log("✅ FINAL VIDEO READY");
 
-    const finalVideo = fs.readFileSync("output.mp4");
+    // ----------------------
+    // 8. RETURN VIDEO
+    // ----------------------
+    const videoBuffer = fs.readFileSync("output.mp4");
 
     res.setHeader("Content-Type", "video/mp4");
-    res.send(finalVideo);
+    res.send(videoBuffer);
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).send("Failed to generate video");
+    console.error(err);
+    res.status(500).json({ error: "failed to generate video" });
   }
 });
 
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
