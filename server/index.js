@@ -3,6 +3,8 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const { execSync } = require("child_process");
+const OpenAI = require("openai");
+
 require("dotenv").config();
 
 const app = express();
@@ -11,6 +13,10 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 app.get("/", (req, res) => {
   res.send("AI Reel Generator Backend Running");
@@ -22,38 +28,66 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", prompt);
 
+    // =========================
     // CLEAN OLD FILES
-    [
+    // =========================
+
+    const filesToDelete = [
       "voice.mp3",
-      "output.mp4",
       "combined.mp4",
       "final.mp4",
       "list.txt",
+      "temp0.mp4",
+      "temp1.mp4",
+      "temp2.mp4",
+      "temp3.mp4",
+      "temp4.mp4",
+      "temp5.mp4",
       "clip0.mp4",
       "clip1.mp4",
       "clip2.mp4",
       "clip3.mp4",
       "clip4.mp4",
       "clip5.mp4",
-    ].forEach((file) => {
-      if (fs.existsSync(file)) fs.unlinkSync(file);
+    ];
+
+    filesToDelete.forEach((file) => {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
     });
 
     // =========================
-    // SCRIPT
+    // AI SCRIPT GENERATION
     // =========================
 
-    const script = `
-Success is built daily.
-Most people quit too early.
-Discipline changes everything.
-Keep going even when it's hard.
-Success is built daily.
-`;
+    console.log("🧠 Generating AI script");
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You create short viral motivational TikTok reel scripts. Keep them emotional, punchy, cinematic, and easy to caption.",
+        },
+        {
+          role: "user",
+          content: `Create a viral reel script about: ${prompt}`,
+        },
+      ],
+    });
+
+    const script = completion.choices[0].message.content;
+
+    console.log("📝 Script:");
+    console.log(script);
 
     // =========================
     // ELEVENLABS VOICE
     // =========================
+
+    console.log("🎤 Generating voice");
 
     const voice = await axios({
       method: "POST",
@@ -71,11 +105,13 @@ Success is built daily.
 
     fs.writeFileSync("voice.mp3", voice.data);
 
-    console.log("🎤 Voice ready");
+    console.log("✅ Voice ready");
 
     // =========================
-    // PEXELS SEARCH
+    // SEARCH VIDEOS
     // =========================
+
+    console.log("🔍 Searching clips");
 
     const search = await axios.get(
       `https://api.pexels.com/videos/search?query=${prompt}&per_page=6`,
@@ -90,7 +126,7 @@ Success is built daily.
 
     if (!videos.length) {
       return res.status(500).json({
-        error: "No videos found",
+        error: "No clips found",
       });
     }
 
@@ -102,6 +138,8 @@ Success is built daily.
 
     for (let i = 0; i < selectedVideos.length; i++) {
       const videoUrl = selectedVideos[i].video_files[0].link;
+
+      console.log(`⬇️ Downloading clip ${i}`);
 
       const response = await axios({
         method: "GET",
@@ -116,9 +154,12 @@ Success is built daily.
 
       response.data.pipe(writer);
 
-      await new Promise((resolve) => writer.on("finish", resolve));
+      await new Promise((resolve) => {
+        writer.on("finish", resolve);
+      });
 
-      // TRIM TO 5 SECONDS
+      // TRIM + VERTICAL FORMAT
+
       execSync(`
         ffmpeg -y \
         -i ${tempFile} \
@@ -131,7 +172,7 @@ Success is built daily.
       fs.unlinkSync(tempFile);
     }
 
-    console.log("🎬 Clips downloaded + trimmed");
+    console.log("✅ Clips downloaded + trimmed");
 
     // =========================
     // CONCAT CLIPS
@@ -154,17 +195,42 @@ Success is built daily.
       combined.mp4
     `);
 
-    console.log("📎 Clips combined");
+    console.log("✅ Clips combined");
 
     // =========================
-    // CAPTIONS
+    // CAPTION SETUP
     // =========================
+
+    const lines = script
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .slice(0, 5);
+
+    let captionFilters = "";
+
+    lines.forEach((line, index) => {
+      const start = index * 5;
+      const end = start + 5;
+
+      captionFilters += `drawtext=text='${line
+        .replace(/'/g, "")
+        .replace(/:/g, "")
+        .replace(/,/g, "")}':fontcolor=yellow:fontsize=48:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,${start},${end})',`;
+    });
+
+    captionFilters = captionFilters.slice(0, -1);
+
+    // =========================
+    // FINAL VIDEO
+    // =========================
+
+    console.log("🎞️ Rendering final video");
 
     execSync(`
       ffmpeg -y \
       -i combined.mp4 \
       -i voice.mp3 \
-      -vf "drawtext=text='SUCCESS IS BUILT DAILY':fontcolor=yellow:fontsize=52:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-220,drawtext=text='DISCIPLINE CHANGES EVERYTHING':fontcolor=white:fontsize=40:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-150" \
+      -vf "${captionFilters}" \
       -map 0:v \
       -map 1:a \
       -shortest \
