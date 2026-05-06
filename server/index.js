@@ -1,10 +1,11 @@
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import axios from "axios";
+import fs from "fs";
+import { execSync } from "child_process";
 
-const express = require("express");
-const cors = require("cors");
-const fs = require("fs");
-const axios = require("axios");
-const { execSync } = require("child_process");
+dotenv.config();
 
 const app = express();
 
@@ -13,19 +14,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-/*
-========================================
-REAL ELEVENLABS VOICE ID
-========================================
-*/
-
-const VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
-
-/*
-========================================
-GENERATE VIDEO
-========================================
-*/
+app.get("/", (req, res) => {
+  res.send("AI Reel Generator Backend Running 🚀");
+});
 
 app.post("/generate-video", async (req, res) => {
   try {
@@ -33,163 +24,91 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", prompt);
 
-    /*
-    ========================================
-    SCRIPT
-    ========================================
-    */
+    // -----------------------------
+    // ELEVENLABS VOICE GENERATION
+    // -----------------------------
 
-    const script = `
-Most people quit too early.
+    const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Bella voice
 
-Success comes from consistency.
-
-Keep going even when it hurts.
-
-Small business big dreams.
-
-You can win if you want.
-`;
-
-    /*
-    ========================================
-    ELEVENLABS VOICE
-    ========================================
-    */
-
-    const voiceResponse = await axios({
+    const response = await axios({
       method: "POST",
       url: `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-
       headers: {
         Accept: "audio/mpeg",
         "Content-Type": "application/json",
         "xi-api-key": process.env.ELEVENLABS_API_KEY,
       },
-
+      responseType: "arraybuffer",
       data: {
-        text: script,
-        model_id: "eleven_monolingual_v1",
-
+        text: `Success starts with discipline. ${prompt} is your opportunity to level up and dominate your future.`,
+        model_id: "eleven_multilingual_v2",
         voice_settings: {
-          stability: 0.4,
+          stability: 0.5,
           similarity_boost: 0.8,
         },
       },
-
-      responseType: "arraybuffer",
     });
 
-    fs.writeFileSync("voice.mp3", voiceResponse.data);
+    fs.writeFileSync("voice.mp3", response.data);
 
     console.log("🎤 Voice ready");
 
-    /*
-    ========================================
-    CAPTIONS
-    ========================================
-    */
+    // -----------------------------
+    // CHECK FILES
+    // -----------------------------
 
-    const captions = `
-1
-00:00:00,000 --> 00:00:02,000
-MOST PEOPLE
-QUIT TOO EARLY
+    if (!fs.existsSync("sample.jpg")) {
+      throw new Error("sample.jpg missing");
+    }
 
-2
-00:00:02,000 --> 00:00:04,000
-SUCCESS COMES
-FROM CONSISTENCY
+    if (!fs.existsSync("music.mp3")) {
+      throw new Error("music.mp3 missing");
+    }
 
-3
-00:00:04,000 --> 00:00:06,000
-KEEP GOING
-EVEN WHEN IT HURTS
+    console.log("🎵 Music exists");
+    console.log("🖼️ Image exists");
 
-4
-00:00:06,000 --> 00:00:08,000
-SMALL BUSINESS
-BIG DREAMS
+    // -----------------------------
+    // VIDEO GENERATION
+    // -----------------------------
 
-5
-00:00:08,000 --> 00:00:10,000
-YOU CAN WIN
-IF YOU WANT
-`;
-
-    fs.writeFileSync("captions.srt", captions);
-
-    /*
-    ========================================
-    BACKGROUND MUSIC CHECK
-    ========================================
-    */
-
-    const hasMusic = fs.existsSync("server/music.mp3");
-
-    console.log("🎵 Music exists:", hasMusic);
-
-    /*
-    ========================================
-    CREATE VIDEO
-    ========================================
-    */
-
-    if (hasMusic) {
-      execSync(`
+    execSync(`
 ffmpeg -y \
 -loop 1 -i sample.jpg \
 -i voice.mp3 \
--stream_loop -1 -i server/music.mp3 \
+-stream_loop -1 -i music.mp3 \
 -filter_complex "
-[0:v]scale=1080:1920,zoompan=z='min(zoom+0.0005,1.1)':d=250:s=1080x1920[v];
-[1:a]volume=1.5[a1];
+[0:v]scale=1080:1920,format=yuv420p[v];
+[1:a]volume=1[a1];
 [2:a]volume=0.15[a2];
 [a1][a2]amix=inputs=2:duration=first[a]
 " \
 -map "[v]" \
 -map "[a]" \
--vf "subtitles=captions.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=4,Outline=2,Shadow=1,MarginV=180,Alignment=2'" \
--c:v libx264 \
--preset ultrafast \
--crf 32 \
--c:a aac \
 -shortest \
-final.mp4
-`);
-    } else {
-      execSync(`
-ffmpeg -y \
--loop 1 -i sample.jpg \
--i voice.mp3 \
--vf "scale=1080:1920,subtitles=captions.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=4,Outline=2,Shadow=1,MarginV=180,Alignment=2'" \
 -c:v libx264 \
--preset ultrafast \
--crf 32 \
 -c:a aac \
--shortest \
-final.mp4
+-pix_fmt yuv420p \
+output.mp4
 `);
-    }
 
     console.log("✅ FINAL VIDEO READY");
 
-    res.sendFile(process.cwd() + "/final.mp4");
-  } catch (err) {
-    console.error(err);
+    res.json({
+      success: true,
+      videoUrl: "/output.mp4",
+    });
+  } catch (error) {
+    console.error("❌ ERROR:", error);
 
     res.status(500).json({
-      error: "Video generation failed",
-      details: err.message,
+      success: false,
+      error: error.message,
     });
   }
 });
 
-/*
-========================================
-START SERVER
-========================================
-*/
+app.use(express.static("."));
 
 app.listen(PORT, () => {
   console.log("🚀 Server running on", PORT);
