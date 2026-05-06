@@ -1,147 +1,179 @@
 import express from "express";
 import cors from "cors";
+import axios from "axios";
 import fs from "fs";
 import path from "path";
-import axios from "axios";
-import { execSync } from "child_process";
-import dotenv from "dotenv";
+import { exec } from "child_process";
+import util from "util";
 
-dotenv.config();
+const execPromise = util.promisify(exec);
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-// temp dir
+// ENV
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ELEVEN_API_KEY = process.env.ELEVENLABS_API_KEY;
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+
+// TEMP DIR
 const TEMP_DIR = "temp";
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// 🔥 MAIN
+// ------------------------
+// 🎬 GENERATE VIDEO
+// ------------------------
 app.post("/generate-video", async (req, res) => {
   try {
     const { idea } = req.body;
-
-    if (!idea) {
-      return res.status(400).json({ error: "No idea provided" });
-    }
-
     console.log("🔥 START:", idea);
 
-    // 🧠 1. SCRIPT (simple for now)
-    const script = `Live your best ${idea} life. Luxury, freedom, success.`;
+    if (!idea) return res.status(400).json({ error: "No idea provided" });
 
-    // 🎙️ 2. VOICE (ElevenLabs)
-    const voicePath = path.join(TEMP_DIR, "voice.mp3");
-
-    const voiceRes = await axios({
-      method: "POST",
-      url: "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
-      headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
+    // ------------------------
+    // 1. GENERATE SCRIPT (OpenAI)
+    // ------------------------
+    const scriptRes = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: `Write a short viral reel script about: ${idea}`,
+          },
+        ],
       },
-      data: {
-        text: script,
-        model_id: "eleven_multilingual_v2",
-      },
-      responseType: "arraybuffer",
-    });
-
-    fs.writeFileSync(voicePath, voiceRes.data);
-    console.log("🎙️ Voice ready");
-
-    // 🎥 3. GET VIDEOS
-    const searchRes = await axios.get(
-      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
-        idea
-      )}&per_page=3`,
       {
         headers: {
-          Authorization: process.env.PEXELS_API_KEY,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
       }
     );
 
-    const videos = searchRes.data.videos;
+    const script = scriptRes.data.choices[0].message.content;
+    console.log("🧠 Script ready");
+
+    // ------------------------
+    // 2. GENERATE VOICE (ElevenLabs)
+    // ------------------------
+    const voiceRes = await axios.post(
+      "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+      {
+        text: script,
+        model_id: "eleven_monolingual_v1",
+      },
+      {
+        responseType: "arraybuffer",
+        headers: {
+          "xi-api-key": ELEVEN_API_KEY, // ✅ IMPORTANT
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const voicePath = path.join(TEMP_DIR, "voice.mp3");
+    fs.writeFileSync(voicePath, voiceRes.data);
+    console.log("🎤 Voice ready");
+
+    // ------------------------
+    // 3. GET CLIPS (Pexels)
+    // ------------------------
+    const clipsRes = await axios.get(
+      `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
+      {
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
+      }
+    );
+
+    const videos = clipsRes.data.videos;
 
     if (!videos.length) {
-      return res.status(400).json({ error: "No videos found" });
+      return res.status(500).json({ error: "No clips found" });
     }
 
-    const clips = [];
+    console.log("📦 Found clips:", videos.length);
+
+    const videoPaths = [];
 
     for (let i = 0; i < videos.length; i++) {
       const url = videos[i].video_files[0].link;
       const filePath = path.join(TEMP_DIR, `clip_${i}.mp4`);
 
-      const response = await axios({
-        url,
-        method: "GET",
+      const response = await axios.get(url, {
         responseType: "stream",
       });
 
       const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
-        response.data.pipe(writer);
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
+      await new Promise((resolve) => writer.on("finish", resolve));
 
-      clips.push(filePath);
+      videoPaths.push(filePath);
     }
 
-    console.log("📥 Clips downloaded");
+    console.log("⬇️ Clips downloaded");
 
-    // 🎬 4. STITCH VIDEO
-    const listPath = path.join(TEMP_DIR, "list.txt");
+    // ------------------------
+    // 4. CREATE CONCAT FILE
+    // ------------------------
+    const listPath = path.join(TEMP_DIR, "videos.txt");
 
-    fs.writeFileSync(
-      listPath,
-      clips.map((c) => `file '${path.resolve(c)}'`).join("\n")
-    );
+    const listContent = videoPaths
+      .map((p) => `file '${path.resolve(p)}'`)
+      .join("\n");
 
-    const stitched = path.join(TEMP_DIR, "stitched.mp4");
+    fs.writeFileSync(listPath, listContent);
 
-    execSync(
-      `ffmpeg -loglevel error -y -f concat -safe 0 -i ${listPath} -c:v libx264 ${stitched}`
-    );
+    // ------------------------
+    // 5. STITCH VIDEO (LOW MEMORY)
+    // ------------------------
+    console.log("🎬 Running ffmpeg stitch...");
 
-    console.log("🎬 Video stitched");
+    await execPromise(`
+      ffmpeg -y \
+      -f concat -safe 0 -i ${listPath} \
+      -vf scale=720:-2 \
+      -preset ultrafast \
+      -crf 32 \
+      -c:v libx264 \
+      -r 24 \
+      ${TEMP_DIR}/stitched.mp4
+    `);
 
-    // 🔥 5. MERGE AUDIO + VIDEO (FIXED)
-    const output = path.join(TEMP_DIR, "final.mp4");
+    // ------------------------
+    // 6. ADD VOICE
+    // ------------------------
+    console.log("🔊 Adding voice...");
 
-    execSync(
-      `ffmpeg -loglevel error -y -i ${stitched} -i ${voicePath} -map 0:v:0 -map 1:a:0 -c:v libx264 -c:a aac -shortest ${output}`
-    );
+    await execPromise(`
+      ffmpeg -y \
+      -i ${TEMP_DIR}/stitched.mp4 \
+      -i ${voicePath} \
+      -shortest \
+      -c:v copy \
+      -c:a aac \
+      ${TEMP_DIR}/final.mp4
+    `);
 
     console.log("✅ FINAL VIDEO READY");
 
-    const url = `${req.protocol}://${req.get("host")}/video`;
-
-    res.json({ video: url });
-
+    // ------------------------
+    // 7. RETURN VIDEO
+    // ------------------------
+    res.sendFile(path.resolve(`${TEMP_DIR}/final.mp4`));
   } catch (err) {
     console.error("❌ ERROR:", err.message);
     res.status(500).json({ error: "Failed to generate video" });
   }
 });
 
-// serve video
-app.get("/video", (req, res) => {
-  const file = path.join(TEMP_DIR, "final.mp4");
-
-  if (!fs.existsSync(file)) {
-    return res.status(404).send("No video");
-  }
-
-  res.sendFile(path.resolve(file));
-});
-
+// ------------------------
 app.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
