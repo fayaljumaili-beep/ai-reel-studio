@@ -43,7 +43,7 @@ app.post("/generate-video", async (req, res) => {
     });
 
     // =========================
-    // SCRIPT + CAPTIONS
+    // SCRIPT
     // =========================
 
     const script = `
@@ -53,11 +53,26 @@ Discipline changes everything.
 Keep going even when it hurts.
 `;
 
+    // =========================
+    // WORD-BY-WORD CAPTIONS
+    // =========================
+
     const captions = [
-      "SUCCESS IS\nBUILT DAILY",
-      "MOST PEOPLE\nQUIT TOO EARLY",
-      "DISCIPLINE\nCHANGES EVERYTHING",
-      "KEEP GOING\nEVEN WHEN IT HURTS"
+      { text: "SUCCESS", start: 0, end: 1 },
+      { text: "IS BUILT", start: 1, end: 2 },
+      { text: "DAILY", start: 2, end: 3 },
+
+      { text: "MOST PEOPLE", start: 3, end: 4 },
+      { text: "QUIT TOO", start: 4, end: 5 },
+      { text: "EARLY", start: 5, end: 6 },
+
+      { text: "DISCIPLINE", start: 6, end: 7 },
+      { text: "CHANGES", start: 7, end: 8 },
+      { text: "EVERYTHING", start: 8, end: 9 },
+
+      { text: "KEEP GOING", start: 9, end: 10 },
+      { text: "EVEN WHEN", start: 10, end: 11 },
+      { text: "IT HURTS", start: 11, end: 12 }
     ];
 
     // =========================
@@ -83,7 +98,7 @@ Keep going even when it hurts.
     console.log("🎤 Voice ready");
 
     // =========================
-    // PEXELS DOWNLOAD
+    // PEXELS VIDEOS
     // =========================
 
     const pexels = await axios.get(
@@ -103,6 +118,10 @@ Keep going even when it hurts.
       });
     }
 
+    // =========================
+    // DOWNLOAD + TRIM CLIPS
+    // =========================
+
     for (let i = 0; i < 3; i++) {
       const videoUrl = videos[i].video_files[0].link;
 
@@ -120,10 +139,6 @@ Keep going even when it hurts.
         writer.on("finish", resolve);
         writer.on("error", reject);
       });
-
-      // =========================
-      // TRIM + FORMAT
-      // =========================
 
       execSync(`
 ffmpeg -y \
@@ -167,28 +182,24 @@ combined.mp4
     console.log("📦 Clips combined");
 
     // =========================
-    // PREMIUM MULTI-LINE CAPTIONS
+    // PREMIUM ANIMATED CAPTIONS
     // =========================
 
     const drawtexts = captions
-      .map((text, i) => {
-        const start = i * 3;
-        const end = start + 3;
-
+      .map((caption) => {
         return `
 drawtext=
-text='${text}':
+text='${caption.text}':
 fontcolor=yellow:
-fontsize=42:
-line_spacing=15:
-borderw=5:
+fontsize=52:
+borderw=6:
 bordercolor=black:
 box=1:
 boxcolor=black@0.5:
-boxborderw=25:
+boxborderw=30:
 x=(w-text_w)/2:
 y=h-th-260:
-enable='between(t,${start},${end})'
+enable='between(t,${caption.start},${caption.end})'
 `;
       })
       .join(",");
