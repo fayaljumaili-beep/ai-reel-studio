@@ -1,11 +1,9 @@
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import axios from "axios";
-import { execSync } from "child_process";
-import dotenv from "dotenv";
-
-dotenv.config();
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
+const fs = require("fs");
+const { execSync } = require("child_process");
+require("dotenv").config();
 
 const app = express();
 
@@ -14,161 +12,136 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-app.get("/", (req, res) => {
-  res.send("AI Reel Generator Running");
-});
-
 app.post("/generate-video", async (req, res) => {
   try {
-    const prompt = req.body.prompt || "success mindset";
+    const topic = req.body.topic || "motivation";
 
-    console.log("🔥 START:", prompt);
+    console.log("🔥 START:", topic);
 
-    // =========================
-    // CLEAN FILES
-    // =========================
-
-    [
+    // CLEAN OLD FILES
+    const filesToDelete = [
       "voice.mp3",
-      "clip1.mp4",
-      "clip2.mp4",
-      "clip3.mp4",
-      "combined.mp4",
+      "music-mixed.mp3",
       "final.mp4",
-      "list.txt"
-    ].forEach((file) => {
+      "combined.mp4",
+      "scene1.mp4",
+      "scene2.mp4",
+      "scene3.mp4",
+      "scene1.jpg",
+      "scene2.jpg",
+      "scene3.jpg",
+    ];
+
+    filesToDelete.forEach((file) => {
       if (fs.existsSync(file)) {
         fs.unlinkSync(file);
       }
     });
 
-    // =========================
     // SCRIPT
-    // =========================
-
-    const script = `
-Success is built daily.
-Most people quit too early.
-Discipline changes everything.
-Keep going even when it hurts.
-`;
-
-    // =========================
-    // ANIMATED CAPTIONS
-    // =========================
-
-    const captions = [
-      { text: "SUCCESS", start: 0, end: 1 },
-      { text: "IS BUILT", start: 1, end: 2 },
-      { text: "DAILY", start: 2, end: 3 },
-
-      { text: "MOST PEOPLE", start: 3, end: 4 },
-      { text: "QUIT TOO", start: 4, end: 5 },
-      { text: "EARLY", start: 5, end: 6 },
-
-      { text: "DISCIPLINE", start: 6, end: 7 },
-      { text: "CHANGES", start: 7, end: 8 },
-      { text: "EVERYTHING", start: 8, end: 9 },
-
-      { text: "KEEP GOING", start: 9, end: 10 },
-      { text: "EVEN WHEN", start: 10, end: 11 },
-      { text: "IT HURTS", start: 11, end: 12 }
+    const script = [
+      "Most people quit too early",
+      "Success is built daily",
+      "Discipline changes everything",
+      "Keep going even when it hurts",
     ];
 
-    // =========================
-    // ELEVENLABS VOICE
-    // =========================
-
+    // VOICEOVER
     const voiceResponse = await axios({
       method: "POST",
       url: `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
       headers: {
         "xi-api-key": process.env.ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+      },
+      data: {
+        text: script.join(". "),
+        model_id: "eleven_multilingual_v2",
       },
       responseType: "arraybuffer",
-      data: {
-        text: script,
-        model_id: "eleven_multilingual_v2"
-      }
     });
 
     fs.writeFileSync("voice.mp3", voiceResponse.data);
 
     console.log("🎤 Voice ready");
 
-    // =========================
-    // GET PEXELS VIDEOS
-    // =========================
+    // PEXELS SEARCHES
+    const searches = [
+      `${topic} success`,
+      `${topic} business`,
+      `${topic} motivation`,
+    ];
 
-    const pexels = await axios.get(
-      `https://api.pexels.com/videos/search?query=${prompt}&per_page=3`,
-      {
-        headers: {
-          Authorization: process.env.PEXELS_API_KEY
+    const clips = [];
+
+    for (let i = 0; i < searches.length; i++) {
+      const response = await axios.get(
+        `https://api.pexels.com/videos/search?query=${searches[i]}&per_page=1`,
+        {
+          headers: {
+            Authorization: process.env.PEXELS_API_KEY,
+          },
         }
-      }
-    );
+      );
 
-    const videos = pexels.data.videos;
+      const videoUrl =
+        response.data.videos?.[0]?.video_files?.find(
+          (v) => v.width < 1000
+        )?.link;
 
-    if (!videos.length) {
-      return res.status(400).json({
-        error: "No videos found"
+      if (!videoUrl) continue;
+
+      const video = await axios.get(videoUrl, {
+        responseType: "arraybuffer",
+      });
+
+      const sceneName = `scene${i + 1}.mp4`;
+
+      fs.writeFileSync(sceneName, video.data);
+
+      clips.push(sceneName);
+    }
+
+    console.log("🎬 Clips downloaded:", clips.length);
+
+    if (clips.length === 0) {
+      return res.status(500).json({
+        error: "No clips found",
       });
     }
 
-    // =========================
-    // DOWNLOAD + TRIM CLIPS
-    // =========================
+    // TRIM CLIPS
+    const trimmedClips = [];
 
-    for (let i = 0; i < 3; i++) {
-      const videoUrl = videos[i].video_files[0].link;
-
-      const response = await axios({
-        url: videoUrl,
-        method: "GET",
-        responseType: "stream"
-      });
-
-      const writer = fs.createWriteStream(`clip${i + 1}.mp4`);
-
-      response.data.pipe(writer);
-
-      await new Promise((resolve, reject) => {
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
+    for (let i = 0; i < clips.length; i++) {
+      const input = clips[i];
+      const output = `trimmed${i}.mp4`;
 
       execSync(`
 ffmpeg -y \
--i clip${i + 1}.mp4 \
+-i ${input} \
 -t 5 \
 -r 24 \
--s 720x1280 \
--c:v libx264 \
+-an \
+-vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='min(zoom+0.0008,1.08)':d=125" \
 -preset ultrafast \
 -crf 32 \
-clip${i + 1}_trim.mp4
+${output}
 `);
 
-      fs.renameSync(`clip${i + 1}_trim.mp4`, `clip${i + 1}.mp4`);
+      trimmedClips.push(output);
     }
 
-    console.log("📎 Clips downloaded + trimmed");
+    console.log("✂️ Clips trimmed");
 
-    // =========================
-    // COMBINE CLIPS
-    // =========================
+    // CONCAT
+    let concatText = "";
 
-    fs.writeFileSync(
-      "list.txt",
-      `
-file 'clip1.mp4'
-file 'clip2.mp4'
-file 'clip3.mp4'
-`
-    );
+    trimmedClips.forEach((clip) => {
+      concatText += `file '${clip}'\n`;
+    });
+
+    fs.writeFileSync("list.txt", concatText);
 
     execSync(`
 ffmpeg -y \
@@ -181,45 +154,50 @@ combined.mp4
 
     console.log("📦 Clips combined");
 
-    // =========================
-    // PREMIUM CAPTIONS
-    // =========================
+    // MIX BACKGROUND MUSIC + VOICE
+    execSync(`
+ffmpeg -y \
+-i voice.mp3 \
+-i ${process.cwd()}/music.mp3 \
+-filter_complex "[1:a]volume=0.12[music];[0:a][music]amix=inputs=2:duration=first" \
+-c:a mp3 \
+music-mixed.mp3
+`);
 
-    const drawtexts = captions
-      .map((caption) => {
-        return `
-drawtext=
-text='${caption.text}':
-fontcolor=yellow:
-fontsize=52:
-borderw=6:
-bordercolor=black:
-box=1:
-boxcolor=black@0.5:
-boxborderw=30:
-x=(w-text_w)/2:
-y=h-th-260:
-enable='between(t,${caption.start},${caption.end})'
-`;
-      })
-      .join(",");
+    console.log("🎵 Music mixed");
 
-    // =========================
-    // FINAL VIDEO + MUSIC MIX
-    // =========================
+    // CAPTIONS
+    const captions = [
+      "MOST PEOPLE",
+      "QUIT TOO EARLY",
+      "SUCCESS IS",
+      "BUILT DAILY",
+      "DISCIPLINE",
+      "CHANGES EVERYTHING",
+      "KEEP GOING",
+      "EVEN WHEN IT HURTS",
+    ];
 
+    let drawtext = "";
+
+    captions.forEach((text, index) => {
+      const start = index * 1.5;
+      const end = start + 1.4;
+
+      drawtext += `drawtext=text='${text}':fontcolor=yellow:fontsize=46:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,${start},${end})',`;
+    });
+
+    drawtext = drawtext.slice(0, -1);
+
+    // FINAL VIDEO
     execSync(`
 ffmpeg -y \
 -i combined.mp4 \
--i voice.mp3 \
--i music.mp3 \
--filter_complex "[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[audio]" \
--vf "${drawtexts}" \
+-i music-mixed.mp3 \
+-vf "${drawtext}" \
 -map 0:v \
--map "[audio]" \
+-map 1:a \
 -shortest \
--r 24 \
--s 720x1280 \
 -c:v libx264 \
 -preset ultrafast \
 -crf 32 \
@@ -231,13 +209,12 @@ final.mp4
     console.log("✅ FINAL VIDEO READY");
 
     res.sendFile(process.cwd() + "/final.mp4");
-
   } catch (err) {
     console.error(err);
 
     res.status(500).json({
       error: "Video generation failed",
-      details: err.message
+      details: err.message,
     });
   }
 });
