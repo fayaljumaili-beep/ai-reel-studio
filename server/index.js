@@ -5,6 +5,7 @@ import fs from "fs";
 import { exec } from "child_process";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -27,15 +28,24 @@ const run = (cmd) =>
 app.post("/generate-video", async (req, res) => {
   try {
     const { idea } = req.body;
+
     console.log("🔥 START:", idea);
 
     // ----------------------
-    // 1. SCRIPT (longer)
+    // 1. SCRIPT
     // ----------------------
-    const script = `If you want success, listen carefully. Start small. Stay consistent. Most people quit too early. The difference between winners and losers is discipline. Keep going even when it's hard. Success is built daily.`;
+    const script = `
+If you want success, listen carefully.
+Start small.
+Stay consistent.
+Most people quit too early.
+The difference between winners and losers is discipline.
+Keep going even when it's hard.
+Success is built daily.
+`;
 
     // ----------------------
-    // 2. VOICE (ElevenLabs)
+    // 2. ELEVENLABS VOICE
     // ----------------------
     const voiceRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -53,13 +63,15 @@ app.post("/generate-video", async (req, res) => {
     );
 
     const voiceBuffer = await voiceRes.arrayBuffer();
+
     fs.writeFileSync("voice.mp3", Buffer.from(voiceBuffer));
+
     console.log("🎤 Voice ready");
 
     // ----------------------
-    // 3. GET MULTIPLE CLIPS
+    // 3. PEXELS MULTI CLIPS
     // ----------------------
-    const searchRes = await fetch(
+    const pexelsRes = await fetch(
       `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
       {
         headers: {
@@ -68,8 +80,9 @@ app.post("/generate-video", async (req, res) => {
       }
     );
 
-    const data = await searchRes.json();
-    const videos = data.videos.slice(0, 3);
+    const pexelsData = await pexelsRes.json();
+
+    const videos = pexelsData.videos.slice(0, 3);
 
     let clipFiles = [];
 
@@ -78,12 +91,14 @@ app.post("/generate-video", async (req, res) => {
         videos[i].video_files.find((v) => v.quality === "sd") ||
         videos[i].video_files[0];
 
-      const url = file.link;
-      const resClip = await fetch(url);
-      const buffer = await resClip.arrayBuffer();
+      const clipRes = await fetch(file.link);
+
+      const clipBuffer = await clipRes.arrayBuffer();
 
       const filename = `clip${i}.mp4`;
-      fs.writeFileSync(filename, Buffer.from(buffer));
+
+      fs.writeFileSync(filename, Buffer.from(clipBuffer));
+
       clipFiles.push(filename);
     }
 
@@ -104,15 +119,19 @@ app.post("/generate-video", async (req, res) => {
     console.log("🔗 Clips combined");
 
     // ----------------------
-    // 5. GET AUDIO DURATION
+    // 5. DURATION
     // ----------------------
-    const duration = script.split(" ").length * 0.45;
+    const cleanScript = script.replace(/\n/g, " ").trim();
+
+    const duration = cleanScript.split(" ").length * 0.45;
 
     // ----------------------
     // 6. TIKTOK CAPTIONS
     // ----------------------
-    const words = script.split(" ");
+    const words = cleanScript.split(" ");
+
     const chunkSize = 3;
+
     let chunks = [];
 
     for (let i = 0; i < words.length; i += chunkSize) {
@@ -124,46 +143,65 @@ app.post("/generate-video", async (req, res) => {
     let filters = [];
 
     chunks.forEach((chunk, i) => {
-      const start = i * chunkDuration;
-      const end = start + chunkDuration;
+      const start = (i * chunkDuration).toFixed(2);
 
-      const safe = chunk.replace(/:/g, "\\:").replace(/'/g, "\\'");
+      const end = ((i + 1) * chunkDuration).toFixed(2);
 
-      // main text
+      const safe = chunk
+        .replace(/:/g, "\\:")
+        .replace(/'/g, "\\'")
+        .replace(/,/g, "\\,");
+
+      const lastWord = chunk.split(" ").slice(-1)[0];
+
+      // MAIN TEXT
       filters.push(
         `drawtext=text='${safe}':fontcolor=white:fontsize=48:borderw=4:bordercolor=black:x=(w-text_w)/2:y=(h/2):enable='between(t,${start},${end})'`
       );
 
-      // highlight last word
-      const lastWord = chunk.split(" ").slice(-1)[0];
-
+      // HIGHLIGHT WORD
       filters.push(
         `drawtext=text='${lastWord}':fontcolor=yellow:fontsize=60:borderw=5:bordercolor=black:x=(w-text_w)/2:y=(h/2)+60:enable='between(t,${start},${end})'`
       );
     });
 
-    const filterComplex = filters.join(",");
+    // ----------------------
+    // 7. WRITE FILTER FILE
+    // ----------------------
+    fs.writeFileSync("filters.txt", filters.join(","));
 
     // ----------------------
-    // 7. FINAL VIDEO
+    // 8. FINAL VIDEO
     // ----------------------
-    await run(
-      `ffmpeg -y -i combined.mp4 -i voice.mp3 -vf "${filterComplex}" -map 0:v -map 1:a -shortest output.mp4`
-    );
+    await run(`
+ffmpeg -y \
+-i combined.mp4 \
+-i voice.mp3 \
+-filter_complex_script filters.txt \
+-map 0:v \
+-map 1:a \
+-shortest output.mp4
+`);
 
     console.log("✅ FINAL VIDEO READY");
 
     // ----------------------
-    // 8. RETURN VIDEO
+    // 9. SEND VIDEO
     // ----------------------
-    const videoBuffer = fs.readFileSync("output.mp4");
+    const video = fs.readFileSync("output.mp4");
 
     res.setHeader("Content-Type", "video/mp4");
-    res.send(videoBuffer);
+
+    res.send(video);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "failed to generate video" });
+
+    res.status(500).json({
+      error: "failed to generate video",
+    });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on ${PORT}`);
+});
