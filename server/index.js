@@ -23,9 +23,20 @@ app.post("/generate-video", async (req, res) => {
     console.log("🔥 START:", idea);
 
     // -------------------------
-    // 1. SCRIPT (simple for now)
+    // 1. VIRAL SCRIPT
     // -------------------------
-    const script = `Live your best life. ${idea}. Success starts today.`;
+    const script = `
+If you want ${idea}, listen carefully.
+
+Most people get this wrong.
+
+Start small. Stay consistent.
+
+And never quit.
+
+Your future depends on it.
+`;
+
     console.log("🧠 Script ready");
 
     // -------------------------
@@ -35,7 +46,11 @@ app.post("/generate-video", async (req, res) => {
       "https://api.elevenlabs.io/v1/text-to-speech/dPah2VEoifKnZT37774q",
       {
         text: script,
-        model_id: "eleven_monolingual_v1"
+        model_id: "eleven_monolingual_v1",
+        voice_settings: {
+          stability: 0.4,
+          similarity_boost: 0.8
+        }
       },
       {
         responseType: "arraybuffer",
@@ -51,7 +66,7 @@ app.post("/generate-video", async (req, res) => {
     console.log("🎤 Voice ready");
 
     // -------------------------
-    // 3. GET 1 SMALL VIDEO
+    // 3. GET 1 SMALL VIDEO (FAST)
     // -------------------------
     const clipsRes = await axios.get(
       `https://api.pexels.com/videos/search?query=${idea}&per_page=1`,
@@ -63,6 +78,7 @@ app.post("/generate-video", async (req, res) => {
     );
 
     const video = clipsRes.data.videos[0];
+
     const file =
       video.video_files.find(v => v.quality === "sd") ||
       video.video_files[0];
@@ -79,7 +95,7 @@ app.post("/generate-video", async (req, res) => {
     console.log("🎬 Clip downloaded");
 
     // -------------------------
-    // 4. MERGE VIDEO + VOICE (FAST)
+    // 4. MERGE VIDEO + VOICE
     // -------------------------
     const outputPath = `${TEMP_DIR}/final.mp4`;
 
