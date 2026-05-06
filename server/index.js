@@ -24,7 +24,10 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", prompt);
 
-    // CLEAN OLD FILES
+    // =========================
+    // CLEAN FILES
+    // =========================
+
     [
       "voice.mp3",
       "clip1.mp4",
@@ -33,12 +36,14 @@ app.post("/generate-video", async (req, res) => {
       "combined.mp4",
       "final.mp4",
       "list.txt"
-    ].forEach((f) => {
-      if (fs.existsSync(f)) fs.unlinkSync(f);
+    ].forEach((file) => {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
     });
 
     // =========================
-    // 1. GENERATE SCRIPT
+    // SCRIPT + CAPTIONS
     // =========================
 
     const script = `
@@ -49,14 +54,14 @@ Keep going even when it hurts.
 `;
 
     const captions = [
-      "SUCCESS IS BUILT DAILY",
-      "MOST PEOPLE QUIT TOO EARLY",
-      "DISCIPLINE CHANGES EVERYTHING",
-      "KEEP GOING EVEN WHEN IT HURTS"
+      "SUCCESS IS\nBUILT DAILY",
+      "MOST PEOPLE\nQUIT TOO EARLY",
+      "DISCIPLINE\nCHANGES EVERYTHING",
+      "KEEP GOING\nEVEN WHEN IT HURTS"
     ];
 
     // =========================
-    // 2. ELEVENLABS VOICE
+    // ELEVENLABS VOICE
     // =========================
 
     const voiceResponse = await axios({
@@ -78,7 +83,7 @@ Keep going even when it hurts.
     console.log("🎤 Voice ready");
 
     // =========================
-    // 3. DOWNLOAD PEXELS CLIPS
+    // PEXELS DOWNLOAD
     // =========================
 
     const pexels = await axios.get(
@@ -116,7 +121,10 @@ Keep going even when it hurts.
         writer.on("error", reject);
       });
 
-      // TRIM EACH CLIP TO 5 SEC
+      // =========================
+      // TRIM + FORMAT
+      // =========================
+
       execSync(`
 ffmpeg -y \
 -i clip${i + 1}.mp4 \
@@ -135,7 +143,7 @@ clip${i + 1}_trim.mp4
     console.log("📎 Clips downloaded + trimmed");
 
     // =========================
-    // 4. COMBINE CLIPS
+    // COMBINE CLIPS
     // =========================
 
     fs.writeFileSync(
@@ -159,7 +167,7 @@ combined.mp4
     console.log("📦 Clips combined");
 
     // =========================
-    // 5. PREMIUM CAPTIONS
+    // PREMIUM MULTI-LINE CAPTIONS
     // =========================
 
     const drawtexts = captions
@@ -171,21 +179,22 @@ combined.mp4
 drawtext=
 text='${text}':
 fontcolor=yellow:
-fontsize=52:
+fontsize=42:
+line_spacing=15:
 borderw=5:
 bordercolor=black:
 box=1:
-boxcolor=black@0.45:
-boxborderw=20:
+boxcolor=black@0.5:
+boxborderw=25:
 x=(w-text_w)/2:
-y=h-th-300:
+y=h-th-260:
 enable='between(t,${start},${end})'
 `;
       })
       .join(",");
 
     // =========================
-    // 6. FINAL VIDEO
+    // FINAL VIDEO
     // =========================
 
     execSync(`
