@@ -184,8 +184,13 @@ ffmpeg -y \
 -i combined.mp4 \
 -i voice.mp3 \
 -vf "${finalFilter}" \
--map 0:v \
--map 1:a \
+-c:v libx264 \
+-preset ultrafast \
+-crf 32 \
+-s 720x1280 \
+-r 24 \
+-c:a aac \
+-b:a 128k \
 -shortest \
 output.mp4
 `);
