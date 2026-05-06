@@ -35,7 +35,7 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", idea);
 
-    // cleanup old files
+    // cleanup
     const files = [
       "clip1.mp4",
       "clip2.mp4",
@@ -58,12 +58,11 @@ app.post("/generate-video", async (req, res) => {
 Success is built daily.
 Most people quit too early.
 Discipline changes everything.
-Keep going even when it's hard.
-Success is built daily.
+Keep going.
 `;
 
     // =========================
-    // VOICE
+    // ELEVENLABS VOICE
     // =========================
 
     const voiceRes = await fetch(
@@ -88,7 +87,7 @@ Success is built daily.
     console.log("🎤 Voice ready");
 
     // =========================
-    // PEXELS
+    // PEXELS VIDEOS
     // =========================
 
     const pexelsRes = await fetch(
@@ -152,7 +151,7 @@ combined.mp4
     console.log("📎 Clips combined");
 
     // =========================
-    // CAPTIONS
+    // CAPTIONS + EFFECTS
     // =========================
 
     const captions = [
@@ -168,12 +167,24 @@ combined.mp4
       const start = i * 3;
       const end = start + 3;
 
+      // BIG MAIN TEXT
       captionFilters.push(
-        `drawtext=text='${text}':fontcolor=yellow:fontsize=58:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t\\,${start}\\,${end})'`
+        `drawtext=text='${text}':fontcolor=yellow:fontsize=72:borderw=6:bordercolor=black:x=(w-text_w)/2:y=h-260:enable='between(t\\,${start}\\,${end})'`
+      );
+
+      // TOP TEXT
+      captionFilters.push(
+        `drawtext=text='MINDSET':fontcolor=white:fontsize=32:borderw=3:bordercolor=black:x=(w-text_w)/2:y=120:enable='between(t\\,${start}\\,${end})'`
       );
     });
 
-    const finalFilter = captionFilters.join(",");
+    const finalFilter = `
+scale=720:1280,
+zoompan=z='min(zoom+0.0008,1.08)':d=1:
+x='iw/2-(iw/zoom/2)':
+y='ih/2-(ih/zoom/2)',
+${captionFilters.join(",")}
+`;
 
     // =========================
     // FINAL VIDEO
@@ -187,7 +198,6 @@ ffmpeg -y \
 -c:v libx264 \
 -preset ultrafast \
 -crf 32 \
--s 720x1280 \
 -r 24 \
 -c:a aac \
 -b:a 128k \
@@ -198,7 +208,7 @@ output.mp4
     console.log("✅ FINAL VIDEO READY");
 
     // =========================
-    // RESPONSE
+    // SEND VIDEO
     // =========================
 
     const videoBuffer = fs.readFileSync("output.mp4");
