@@ -38,13 +38,12 @@
 
 <h1>🎬 AI Reel Generator</h1>
 
-<input id="idea" placeholder="Enter idea..." />
-<br>
-<button onclick="generate()">Generate</button>
+<input id="ideaInput" />
+<button id="generateBtn">Generate</button>
 
 <p id="status"></p>
 
-<video id="video" controls></video>
+<video id="videoPlayer" controls style="display:none; width:300px;"></video>
 
 <script src="index.js"></script>
 

@@ -1,13 +1,18 @@
-async function generate() {
-  const idea = document.getElementById("idea").value;
-  const status = document.getElementById("status");
-  const video = document.getElementById("video");
+const API_URL = "https://ai-reel-studio-production.up.railway.app/generate-video";
+
+const btn = document.getElementById("generateBtn");
+const input = document.getElementById("ideaInput");
+const video = document.getElementById("videoPlayer");
+const status = document.getElementById("status");
+
+btn.onclick = async () => {
+  const idea = input.value;
 
   status.innerText = "⏳ Generating...";
-  video.src = "";
+  video.style.display = "none";
 
   try {
-    const res = await fetch("https://ai-reel-studio-production.up.railway.app/generate-video", {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -15,14 +20,19 @@ async function generate() {
       body: JSON.stringify({ idea }),
     });
 
-    const data = await res.json();
+    if (!res.ok) throw new Error("Failed request");
 
-    if (!res.ok) throw new Error(data.error);
+    // 🔥 THIS IS THE FIX
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
 
-    video.src = data.video;
-    status.innerText = "✅ Done";
+    video.src = url;
+    video.style.display = "block";
+
+    status.innerText = "✅ Video ready";
 
   } catch (err) {
-    status.innerText = "❌ " + err.message;
+    console.error(err);
+    status.innerText = "❌ Failed to generate video";
   }
-}
+};
