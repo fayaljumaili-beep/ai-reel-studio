@@ -10,10 +10,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
-// 🔐 ENV KEYS
+// ENV
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const VOICE_ID = process.env.ELEVENLABS_VOICE_ID; // put your voice id
+const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 
 // helper
 const run = (cmd) =>
@@ -29,91 +29,110 @@ app.post("/generate-video", async (req, res) => {
     const { idea } = req.body;
     console.log("🔥 START:", idea);
 
-    // ------------------------
-    // 1. SCRIPT (simple for now)
-    // ------------------------
+    // ----------------------
+    // 1. SCRIPT
+    // ----------------------
     const script = `If you want success, listen carefully. Start small. Stay consistent. This is how you win.`;
 
-    // ------------------------
+    // ----------------------
     // 2. VOICE (ElevenLabs)
-    // ------------------------
+    // ----------------------
     const voiceRes = await fetch(
-  `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-  {
-    method: "POST",
-    headers: {
-      "xi-api-key": ELEVENLABS_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      text: script,
-      model_id: "eleven_monolingual_v1"
-    })
-  }
-);
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: script,
+          model_id: "eleven_monolingual_v1",
+        }),
+      }
+    );
 
     const voiceBuffer = await voiceRes.arrayBuffer();
     fs.writeFileSync("voice.mp3", Buffer.from(voiceBuffer));
     console.log("🎤 Voice ready");
 
-    // ------------------------
-    // 3. GET VIDEO (PEXELS)
-    // ------------------------
+    // ----------------------
+    // 3. GET VIDEO (Pexels)
+    // ----------------------
     const pexelsRes = await fetch(
-      `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
+      `https://api.pexels.com/videos/search?query=${idea}&per_page=1`,
       {
-        headers: {
-          Authorization: PEXELS_API_KEY,
-        },
+        headers: { Authorization: PEXELS_API_KEY },
       }
     );
 
     const pexelsData = await pexelsRes.json();
-    const videos = pexelsData.videos;
+    const video = pexelsData.videos[0];
 
-    if (!videos || videos.length === 0) {
-      throw new Error("No videos found");
-    }
-
-    // pick SMALL clip (important!)
+    // pick SMALL file (critical for speed)
     const file =
-      videos[0].video_files.find((v) => v.quality === "sd") ||
-      videos[0].video_files[0];
+      video.video_files.find((v) => v.quality === "sd") ||
+      video.video_files[0];
 
     const videoUrl = file.link;
 
     const videoRes = await fetch(videoUrl);
     const videoBuffer = await videoRes.arrayBuffer();
-    fs.writeFileSync("clip.mp4", Buffer.from(videoBuffer));
+    fs.writeFileSync("input.mp4", Buffer.from(videoBuffer));
+
     console.log("🎬 Clip downloaded");
 
-    // ------------------------
-    // 4. MERGE + CAPTIONS
-    // ------------------------
-    const cmd = `
-    ffmpeg -y -i clip.mp4 -i voice.mp3 \
-    -vf "scale=720:-2,
-    drawtext=text='IF YOU WANT SUCCESS':fontcolor=white:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300,
-    drawtext=text='LISTEN CAREFULLY':fontcolor=yellow:fontsize=65:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,2,4)',
-    drawtext=text='START SMALL':fontcolor=white:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-150:enable='between(t,4,6)',
-    drawtext=text='STAY CONSISTENT':fontcolor=yellow:fontsize=65:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-80:enable='between(t,6,8)'
-    " \
-    -map 0:v -map 1:a -shortest -c:v libx264 -c:a aac final.mp4
-    `;
+    // ----------------------
+    // 4. GET AUDIO DURATION
+    // ----------------------
+    await run(
+      `ffprobe -i voice.mp3 -show_entries format=duration -v quiet -of csv="p=0" > duration.txt`
+    );
 
-    await run(cmd);
+    const duration = parseFloat(
+      fs.readFileSync("duration.txt", "utf-8")
+    );
+
+    // ----------------------
+    // 5. WORD-BY-WORD CAPTIONS
+    // ----------------------
+    const words = script.split(" ");
+    const wordDuration = duration / words.length;
+
+    let filters = [];
+
+    words.forEach((word, i) => {
+      const start = i * wordDuration;
+      const end = start + wordDuration;
+
+      filters.push(
+        `drawtext=text='${word}':fontcolor=yellow:fontsize=60:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-200:enable='between(t,${start},${end})'`
+      );
+    });
+
+    const filterComplex = filters.join(",");
+
+    // ----------------------
+    // 6. FINAL VIDEO
+    // ----------------------
+    await run(`
+      ffmpeg -y -i input.mp4 -i voice.mp3 \
+      -vf "${filterComplex}" \
+      -c:v libx264 -c:a aac -shortest output.mp4
+    `);
+
     console.log("✅ FINAL VIDEO READY");
 
-    // ------------------------
-    // 5. RETURN VIDEO
-    // ------------------------
-    res.sendFile(`${process.cwd()}/final.mp4`);
+    const finalVideo = fs.readFileSync("output.mp4");
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.send(finalVideo);
   } catch (err) {
     console.error("❌ ERROR:", err);
-    res.status(500).send("Error generating video");
+    res.status(500).send("Failed to generate video");
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
