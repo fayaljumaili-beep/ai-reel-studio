@@ -11,15 +11,21 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
 
+// ENV
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 
+// helper
 const run = (cmd) =>
   new Promise((resolve, reject) => {
-    exec(cmd, (err) => {
-      if (err) reject(err);
-      else resolve();
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.log(stderr);
+        reject(err);
+      } else {
+        resolve(stdout);
+      }
     });
   });
 
@@ -29,15 +35,37 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🔥 START:", idea);
 
-    // -----------------------------
-    // SCRIPT
-    // -----------------------------
-    const script =
-      "If you want success, listen carefully. Most people quit too early. Stay disciplined. Keep showing up even when it's hard. Success is built daily.";
+    // cleanup old files
+    const files = [
+      "clip1.mp4",
+      "clip2.mp4",
+      "clip3.mp4",
+      "combined.mp4",
+      "voice.mp3",
+      "output.mp4",
+      "list.txt",
+    ];
 
-    // -----------------------------
+    files.forEach((f) => {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    });
+
+    // =========================
+    // SCRIPT
+    // =========================
+
+    const script = `
+Success is built daily.
+Most people quit too early.
+Discipline changes everything.
+Keep going even when it's hard.
+Success is built daily.
+`;
+
+    // =========================
     // VOICE
-    // -----------------------------
+    // =========================
+
     const voiceRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       {
@@ -59,11 +87,14 @@ app.post("/generate-video", async (req, res) => {
 
     console.log("🎤 Voice ready");
 
-    // -----------------------------
-    // GET MULTIPLE CLIPS
-    // -----------------------------
+    // =========================
+    // PEXELS
+    // =========================
+
     const pexelsRes = await fetch(
-      `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(
+        idea
+      )}&per_page=3`,
       {
         headers: {
           Authorization: PEXELS_API_KEY,
@@ -73,77 +104,86 @@ app.post("/generate-video", async (req, res) => {
 
     const pexelsData = await pexelsRes.json();
 
-    const clips = pexelsData.videos.slice(0, 3);
-
-    for (let i = 0; i < clips.length; i++) {
-      const videoUrl = clips[i].video_files[0].link;
-
-      const videoRes = await fetch(videoUrl);
-
-      const buffer = await videoRes.arrayBuffer();
-
-      fs.writeFileSync(`clip${i}.mp4`, Buffer.from(buffer));
+    if (!pexelsData.videos || pexelsData.videos.length === 0) {
+      return res.status(500).json({
+        error: "No videos found",
+      });
     }
 
-    console.log("🎬 Clips downloaded:", clips.length);
+    // download clips
+    for (let i = 0; i < 3; i++) {
+      const video = pexelsData.videos[i];
 
-    // -----------------------------
+      if (!video) continue;
+
+      const videoUrl = video.video_files[0].link;
+
+      const clipRes = await fetch(videoUrl);
+
+      const clipBuffer = await clipRes.arrayBuffer();
+
+      fs.writeFileSync(`clip${i + 1}.mp4`, Buffer.from(clipBuffer));
+    }
+
+    console.log("🎬 Clips downloaded: 3");
+
+    // =========================
     // COMBINE CLIPS
-    // -----------------------------
+    // =========================
+
     fs.writeFileSync(
-      "inputs.txt",
+      "list.txt",
       `
-file 'clip0.mp4'
 file 'clip1.mp4'
 file 'clip2.mp4'
+file 'clip3.mp4'
 `
     );
 
-    await run(
-      `ffmpeg -y -f concat -safe 0 -i inputs.txt -c copy combined.mp4`
-    );
+    await run(`
+ffmpeg -y \
+-f concat \
+-safe 0 \
+-i list.txt \
+-c copy \
+combined.mp4
+`);
 
     console.log("📎 Clips combined");
 
-    // -----------------------------
-    // INSANE CAPTIONS
-    // -----------------------------
-    const words = script.split(" ");
+    // =========================
+    // CAPTIONS
+    // =========================
 
-    let filters = [];
+    const captions = [
+      "SUCCESS IS BUILT DAILY",
+      "MOST PEOPLE QUIT TOO EARLY",
+      "DISCIPLINE CHANGES EVERYTHING",
+      "KEEP GOING"
+    ];
 
-    words.forEach((word, i) => {
-      const start = (i * 0.8).toFixed(2);
-      const end = ((i + 1) * 0.8).toFixed(2);
+    let captionFilters = [];
 
-      const cleanWord = word
-        .replace(/'/g, "\\\\'")
-        .replace(/:/g, "\\:")
-        .replace(/,/g, "\\,");
+    captions.forEach((text, i) => {
+      const start = i * 3;
+      const end = start + 3;
 
-      // white word
-      filters.push(
-        `drawtext=text='${cleanWord}':fontcolor=white:fontsize=48:borderw=4:bordercolor=black:x=(w-text_w)/2:y=(h/2):enable='between(t\\,${start}\\,${end})'`
-      );
-
-      // highlighted word
-      filters.push(
-        `drawtext=text='${cleanWord}':fontcolor=yellow:fontsize=60:borderw=6:bordercolor=black:x=(w-text_w)/2:y=(h/2)+60:enable='between(t\\,${start}\\,${end})'`
+      captionFilters.push(
+        `drawtext=text='${text}':fontcolor=yellow:fontsize=58:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t\\,${start}\\,${end})'`
       );
     });
 
-    const filterGraph = filters.join(",");
+    const finalFilter = captionFilters.join(",");
 
-    fs.writeFileSync("filters.txt", filterGraph);
-
-    // -----------------------------
+    // =========================
     // FINAL VIDEO
-    // -----------------------------
+    // =========================
+
     await run(`
 ffmpeg -y \
 -i combined.mp4 \
 -i voice.mp3 \
--filter_complex_script filters.txt \
+-vf "${finalFilter}" \
 -map 0:v \
 -map 1:a \
 -shortest \
@@ -152,20 +192,25 @@ output.mp4
 
     console.log("✅ FINAL VIDEO READY");
 
-    const video = fs.readFileSync("output.mp4");
+    // =========================
+    // RESPONSE
+    // =========================
+
+    const videoBuffer = fs.readFileSync("output.mp4");
 
     res.setHeader("Content-Type", "video/mp4");
 
-    res.send(video);
+    res.send(videoBuffer);
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
+    console.log("❌ ERROR:", err);
 
     res.status(500).json({
-      error: err.message,
+      error: "Failed to generate video",
     });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+  console.log(`🚀 Server running on ${PORT}`);
 });
