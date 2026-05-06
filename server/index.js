@@ -30,12 +30,19 @@ app.post("/generate-video", async (req, res) => {
     console.log("🔥 START:", idea);
 
     // ----------------------
-    // 1. SCRIPT
+    // 1. LONGER SCRIPT
     // ----------------------
-    const script = `If you want success, listen carefully. Start small. Stay consistent. This is how you win.`;
+    const script = `
+If you want success, listen carefully.
+Start small.
+Stay consistent.
+Most people quit too early.
+But winners keep going.
+This is how you build real success.
+`;
 
     // ----------------------
-    // 2. VOICE (ElevenLabs)
+    // 2. VOICE
     // ----------------------
     const voiceRes = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
@@ -57,33 +64,49 @@ app.post("/generate-video", async (req, res) => {
     console.log("🎤 Voice ready");
 
     // ----------------------
-    // 3. GET VIDEO (Pexels)
+    // 3. GET MULTIPLE CLIPS
     // ----------------------
     const pexelsRes = await fetch(
-      `https://api.pexels.com/videos/search?query=${idea}&per_page=1`,
+      `https://api.pexels.com/videos/search?query=${idea}&per_page=3`,
       {
         headers: { Authorization: PEXELS_API_KEY },
       }
     );
 
     const pexelsData = await pexelsRes.json();
-    const video = pexelsData.videos[0];
 
-    // pick SMALL file (critical for speed)
-    const file =
-      video.video_files.find((v) => v.quality === "sd") ||
-      video.video_files[0];
+    let clips = [];
 
-    const videoUrl = file.link;
+    for (let i = 0; i < 3; i++) {
+      const video = pexelsData.videos[i];
 
-    const videoRes = await fetch(videoUrl);
-    const videoBuffer = await videoRes.arrayBuffer();
-    fs.writeFileSync("input.mp4", Buffer.from(videoBuffer));
+      const file =
+        video.video_files.find((v) => v.quality === "sd") ||
+        video.video_files[0];
 
-    console.log("🎬 Clip downloaded");
+      const videoUrl = file.link;
+
+      const videoRes = await fetch(videoUrl);
+      const videoBuffer = await videoRes.arrayBuffer();
+
+      const filename = `clip${i}.mp4`;
+      fs.writeFileSync(filename, Buffer.from(videoBuffer));
+
+      clips.push(filename);
+    }
+
+    console.log("🎬 Clips downloaded");
 
     // ----------------------
-    // 4. GET AUDIO DURATION
+    // 4. CONCAT CLIPS
+    // ----------------------
+    const concatList = clips.map((c) => `file '${c}'`).join("\n");
+    fs.writeFileSync("list.txt", concatList);
+
+    await run(`ffmpeg -y -f concat -safe 0 -i list.txt -c copy stitched.mp4`);
+
+    // ----------------------
+    // 5. GET AUDIO DURATION
     // ----------------------
     await run(
       `ffprobe -i voice.mp3 -show_entries format=duration -v quiet -of csv="p=0" > duration.txt`
@@ -94,9 +117,10 @@ app.post("/generate-video", async (req, res) => {
     );
 
     // ----------------------
-    // 5. WORD-BY-WORD CAPTIONS
+    // 6. INSANE CAPTIONS
     // ----------------------
-    const words = script.split(" ");
+    const cleanScript = script.replace(/\n/g, " ");
+    const words = cleanScript.split(" ");
     const wordDuration = duration / words.length;
 
     let filters = [];
@@ -105,18 +129,24 @@ app.post("/generate-video", async (req, res) => {
       const start = i * wordDuration;
       const end = start + wordDuration;
 
+      // full sentence
       filters.push(
-        `drawtext=text='${word}':fontcolor=yellow:fontsize=60:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-200:enable='between(t,${start},${end})'`
+        `drawtext=text='${cleanScript}':fontcolor=white:fontsize=40:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-220:enable='between(t,${start},${end})'`
+      );
+
+      // highlighted word
+      filters.push(
+        `drawtext=text='${word}':fontcolor=yellow:fontsize=60:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-150:enable='between(t,${start},${end})'`
       );
     });
 
     const filterComplex = filters.join(",");
 
     // ----------------------
-    // 6. FINAL VIDEO
+    // 7. FINAL VIDEO
     // ----------------------
     await run(`
-      ffmpeg -y -i input.mp4 -i voice.mp3 \
+      ffmpeg -y -i stitched.mp4 -i voice.mp3 \
       -vf "${filterComplex}" \
       -c:v libx264 -c:a aac -shortest output.mp4
     `);
