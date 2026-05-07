@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
 import fs from "fs";
-import { execSync } from "child_process";
+import { exec } from "child_process";
 
 dotenv.config();
 
@@ -72,7 +72,9 @@ app.post("/generate-video", async (req, res) => {
     // GENERATE VIDEO
     // -----------------------------------
 
-    execSync(`
+    await new Promise((resolve, reject) => {
+      exec(
+        `
 ffmpeg -y \
 -loop 1 -i sample.jpg \
 -i voice.mp3 \
@@ -90,9 +92,18 @@ ffmpeg -y \
 -c:a aac \
 -pix_fmt yuv420p \
 output.mp4
-`);
-
-    console.log("✅ FINAL VIDEO READY");
+`,
+        (error, stdout, stderr) => {
+          if (error) {
+            console.log(stderr);
+            reject(error);
+          } else {
+            console.log("✅ FINAL VIDEO READY");
+            resolve();
+          }
+        }
+      );
+    });
 
     res.json({
       success: true,
