@@ -10,17 +10,23 @@ import { randomUUID } from "crypto";
 dotenv.config();
 
 const app = express();
+
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 const PORT = process.env.PORT || 8080;
+
 const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const videosDir = path.join(publicDir, "videos");
-const sampleImage = path.join(rootDir, "sample.jpg");
 
-if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
+if (!fs.existsSync(videosDir)) {
+  fs.mkdirSync(videosDir, { recursive: true });
+}
 
 app.use("/videos", express.static(videosDir));
 
@@ -34,7 +40,9 @@ app.get("/status/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
 
   if (!job) {
-    return res.status(404).json({ status: "not_found" });
+    return res.status(404).json({
+      status: "not_found",
+    });
   }
 
   res.json(job);
@@ -44,16 +52,26 @@ app.post("/generate-video", (req, res) => {
   const { prompt } = req.body;
 
   if (!prompt || !prompt.trim()) {
-    return res.status(400).json({ success: false, error: "Prompt is required" });
+    return res.status(400).json({
+      success: false,
+      error: "Prompt is required",
+    });
   }
 
   const jobId = randomUUID();
-  jobs.set(jobId, { status: "processing" });
 
-  res.json({ success: true, jobId });
+  jobs.set(jobId, {
+    status: "processing",
+  });
+
+  res.json({
+    success: true,
+    jobId,
+  });
 
   generateVideo(jobId, prompt.trim()).catch((error) => {
     console.error("❌ JOB ERROR:", error);
+
     jobs.set(jobId, {
       status: "error",
       error: error.message || "Video generation failed",
@@ -65,16 +83,41 @@ async function generateVideo(jobId, prompt) {
   console.log("🔥 START:", prompt);
 
   const voiceFile = path.join(videosDir, `${jobId}-voice.mp3`);
+  const imageFile = path.join(videosDir, `${jobId}-image.jpg`);
   const outputFile = path.join(videosDir, `${jobId}.mp4`);
+
   const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 
   if (!process.env.ELEVENLABS_API_KEY) {
     throw new Error("ELEVENLABS_API_KEY is missing");
   }
 
-  if (!fs.existsSync(sampleImage)) {
-    throw new Error("sample.jpg missing");
-  }
+  // -----------------------------------
+  // GENERATE AI IMAGE
+  // -----------------------------------
+
+  console.log("🖼️ Generating AI image...");
+
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    prompt
+  )}`;
+
+  const imageResponse = await axios({
+    method: "GET",
+    url: imageUrl,
+    responseType: "arraybuffer",
+    timeout: 120000,
+  });
+
+  fs.writeFileSync(imageFile, imageResponse.data);
+
+  console.log("🖼️ AI image ready");
+
+  // -----------------------------------
+  // GENERATE VOICE
+  // -----------------------------------
+
+  console.log("🎤 Generating voice...");
 
   const voiceResponse = await axios({
     method: "POST",
@@ -97,8 +140,13 @@ async function generateVideo(jobId, prompt) {
   });
 
   fs.writeFileSync(voiceFile, voiceResponse.data);
+
   console.log("🎤 Voice ready");
-  console.log("🖼️ Image exists");
+
+  // -----------------------------------
+  // GENERATE VIDEO
+  // -----------------------------------
+
   console.log("🎬 Starting ffmpeg...");
 
   await new Promise((resolve, reject) => {
@@ -107,7 +155,7 @@ async function generateVideo(jobId, prompt) {
       "-loop",
       "1",
       "-i",
-      sampleImage,
+      imageFile,
       "-i",
       voiceFile,
       "-filter_complex",
@@ -156,11 +204,19 @@ async function generateVideo(jobId, prompt) {
     videoUrl: `/videos/${jobId}.mp4?ts=${Date.now()}`,
   });
 
+  // -----------------------------------
+  // CLEANUP
+  // -----------------------------------
+
   try {
     fs.unlinkSync(voiceFile);
+  } catch {}
+
+  try {
+    fs.unlinkSync(imageFile);
   } catch {}
 }
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on", PORT);
+  console.log(`🚀 Server running on ${PORT}`);
 });
