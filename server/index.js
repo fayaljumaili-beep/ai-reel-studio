@@ -20,6 +20,8 @@ const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const videosDir = path.join(publicDir, "videos");
 
+const musicFile = path.join(rootDir, "music.mp3");
+
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
 }
@@ -90,6 +92,10 @@ async function generateVideo(jobId, prompt) {
 
   if (!process.env.ELEVENLABS_API_KEY) {
     throw new Error("ELEVENLABS_API_KEY is missing");
+  }
+
+  if (!fs.existsSync(musicFile)) {
+    throw new Error("music.mp3 missing in project root");
   }
 
   // -----------------------------------
@@ -168,14 +174,20 @@ async function generateVideo(jobId, prompt) {
       "-i",
       voiceFile,
 
+      "-stream_loop",
+      "-1",
+
+      "-i",
+      musicFile,
+
       "-filter_complex",
-      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v]`,
+      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
 
       "-map",
       "[v]",
 
       "-map",
-      "1:a",
+      "[a]",
 
       "-shortest",
 
