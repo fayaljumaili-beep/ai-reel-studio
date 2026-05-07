@@ -5,6 +5,9 @@ const input = document.getElementById("ideaInput");
 const video = document.getElementById("videoPlayer");
 const status = document.getElementById("status");
 
+let activeJobId = null;
+let pollTimer = null;
+
 btn.onclick = async () => {
   const idea = input.value.trim();
 
@@ -13,6 +16,12 @@ btn.onclick = async () => {
     return;
   }
 
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+
+  activeJobId = null;
   btn.disabled = true;
   status.innerText = "⏳ Generating...";
   video.style.display = "none";
@@ -34,10 +43,11 @@ btn.onclick = async () => {
       throw new Error(data?.error || "Failed request");
     }
 
-    const jobId = data.jobId;
+    activeJobId = data.jobId;
+    status.innerText = "⏳ Rendering...";
 
     const poll = async () => {
-      const check = await fetch(`${API_BASE}/status/${jobId}`);
+      const check = await fetch(`${API_BASE}/status/${activeJobId}`);
       const result = await check.json();
 
       if (result.status === "done") {
@@ -53,7 +63,7 @@ btn.onclick = async () => {
         throw new Error(result.error || "Render failed");
       }
 
-      setTimeout(poll, 3000);
+      pollTimer = setTimeout(poll, 2000);
     };
 
     poll();
