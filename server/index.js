@@ -144,6 +144,12 @@ async function generateVideo(jobId, prompt) {
   console.log("🎤 Voice ready");
 
   // -----------------------------------
+  // VIDEO CAPTION
+  // -----------------------------------
+
+  const captionText = prompt.toUpperCase();
+
+  // -----------------------------------
   // GENERATE VIDEO
   // -----------------------------------
 
@@ -152,27 +158,39 @@ async function generateVideo(jobId, prompt) {
   await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
       "-y",
+
       "-loop",
       "1",
+
       "-i",
       imageFile,
+
       "-i",
       voiceFile,
+
       "-filter_complex",
-      "[0:v]scale=1080:1920,format=yuv420p[v]",
+      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v]`,
+
       "-map",
       "[v]",
+
       "-map",
       "1:a",
+
       "-shortest",
+
       "-c:v",
       "libx264",
+
       "-c:a",
       "aac",
+
       "-pix_fmt",
       "yuv420p",
+
       "-movflags",
       "+faststart",
+
       outputFile,
     ]);
 
