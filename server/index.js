@@ -18,7 +18,6 @@ const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const videosDir = path.join(publicDir, "videos");
 const sampleImage = path.join(rootDir, "sample.jpg");
-const musicFile = path.join(rootDir, "server", "music.mp3");
 
 if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
@@ -67,7 +66,6 @@ async function generateVideo(jobId, prompt) {
 
   const voiceFile = path.join(videosDir, `${jobId}-voice.mp3`);
   const outputFile = path.join(videosDir, `${jobId}.mp4`);
-
   const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 
   if (!process.env.ELEVENLABS_API_KEY) {
@@ -76,10 +74,6 @@ async function generateVideo(jobId, prompt) {
 
   if (!fs.existsSync(sampleImage)) {
     throw new Error("sample.jpg missing");
-  }
-
-  if (!fs.existsSync(musicFile)) {
-    throw new Error("server/music.mp3 missing");
   }
 
   const voiceResponse = await axios({
@@ -104,80 +98,56 @@ async function generateVideo(jobId, prompt) {
 
   fs.writeFileSync(voiceFile, voiceResponse.data);
   console.log("🎤 Voice ready");
-
   console.log("🖼️ Image exists");
-  console.log("🎵 Music exists");
   console.log("🎬 Starting ffmpeg...");
 
-  const ffmpegCommand = `
-ffmpeg -y \
--loop 1 -i "${sampleImage}" \
--i "${voiceFile}" \
--stream_loop -1 -i "${musicFile}" \
--filter_complex "[0:v]scale=1080:1920,format=yuv420p[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[a]" \
--map "[v]" \
--map "[a]" \
--shortest \
--c:v libx264 \
--c:a aac \
--pix_fmt yuv420p \
--movflags +faststart \
-"${outputFile}"
-`;
-
   await new Promise((resolve, reject) => {
-  const args = [
-    "-y",
-    "-loop",
-    "1",
-    "-i",
-    sampleImage,
-    "-i",
-    voiceFile,
-    "-stream_loop",
-    "-1",
-    "-i",
-    musicFile,
-    "-filter_complex",
-    "[0:v]scale=1080:1920,format=yuv420p[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[a]",
-    "-map",
-    "[v]",
-    "-map",
-    "[a]",
-    "-shortest",
-    "-c:v",
-    "libx264",
-    "-c:a",
-    "aac",
-    "-pix_fmt",
-    "yuv420p",
-    "-movflags",
-    "+faststart",
-    outputFile,
-  ];
+    const ffmpeg = spawn("ffmpeg", [
+      "-y",
+      "-loop",
+      "1",
+      "-i",
+      sampleImage,
+      "-i",
+      voiceFile,
+      "-filter_complex",
+      "[0:v]scale=1080:1920,format=yuv420p[v]",
+      "-map",
+      "[v]",
+      "-map",
+      "1:a",
+      "-shortest",
+      "-c:v",
+      "libx264",
+      "-c:a",
+      "aac",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      outputFile,
+    ]);
 
-  const ffmpeg = spawn("ffmpeg", args);
+    ffmpeg.stdout.on("data", (data) => {
+      console.log(`ffmpeg stdout: ${data.toString()}`);
+    });
 
-  ffmpeg.stdout.on("data", (data) => {
-    console.log(`ffmpeg stdout: ${data.toString()}`);
+    ffmpeg.stderr.on("data", (data) => {
+      console.log(`ffmpeg stderr: ${data.toString()}`);
+    });
+
+    ffmpeg.on("error", (err) => {
+      reject(err);
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`ffmpeg exited with code ${code}`));
+      }
+    });
   });
-
-  ffmpeg.stderr.on("data", (data) => {
-    console.log(`ffmpeg stderr: ${data.toString()}`);
-  });
-
-  ffmpeg.on("error", (err) => {
-    reject(err);
-  });
-
-  ffmpeg.on("close", (code) => {
-    if (code === 0) {
-      resolve();
-    } else {
-      reject(new Error(`ffmpeg exited with code ${code}`));
-    }
-  });
-});
 
   console.log("✅ FINAL VIDEO READY");
 
