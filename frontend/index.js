@@ -6,10 +6,17 @@ const video = document.getElementById("videoPlayer");
 const status = document.getElementById("status");
 
 btn.onclick = async () => {
-  const idea = input.value;
+  const idea = input.value.trim();
+
+  if (!idea) {
+    status.innerText = "❌ Please enter an idea";
+    return;
+  }
 
   status.innerText = "⏳ Generating...";
   video.style.display = "none";
+  video.removeAttribute("src");
+  video.load();
 
   try {
     const res = await fetch(API_URL, {
@@ -17,22 +24,24 @@ btn.onclick = async () => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ idea }),
+      body: JSON.stringify({ prompt: idea }),
     });
 
-    if (!res.ok) throw new Error("Failed request");
+    const data = await res.json();
 
-    // 🔥 THIS IS THE FIX
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    if (!res.ok) {
+      throw new Error(data?.error || "Failed request");
+    }
 
-    video.src = url;
+    const videoUrl = new URL(data.videoUrl, API_URL).href;
+
+    video.src = videoUrl;
     video.style.display = "block";
+    video.load();
 
     status.innerText = "✅ Video ready";
-
   } catch (err) {
     console.error(err);
-    status.innerText = "❌ Failed to generate video";
+    status.innerText = `❌ Failed to generate video: ${err.message}`;
   }
 };
