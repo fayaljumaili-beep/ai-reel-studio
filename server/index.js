@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 
 dotenv.config();
@@ -126,22 +126,58 @@ ffmpeg -y \
 `;
 
   await new Promise((resolve, reject) => {
-    exec(
-      ffmpegCommand,
-      { maxBuffer: 10 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (stdout) console.log(stdout);
-        if (stderr) console.log(stderr);
+  const args = [
+    "-y",
+    "-loop",
+    "1",
+    "-i",
+    sampleImage,
+    "-i",
+    voiceFile,
+    "-stream_loop",
+    "-1",
+    "-i",
+    musicFile,
+    "-filter_complex",
+    "[0:v]scale=1080:1920,format=yuv420p[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=2[a]",
+    "-map",
+    "[v]",
+    "-map",
+    "[a]",
+    "-shortest",
+    "-c:v",
+    "libx264",
+    "-c:a",
+    "aac",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    outputFile,
+  ];
 
-        if (error) {
-          console.log("FFMPEG STDERR:", stderr);
-          reject(error);
-        } else {
-          resolve();
-        }
-      }
-    );
+  const ffmpeg = spawn("ffmpeg", args);
+
+  ffmpeg.stdout.on("data", (data) => {
+    console.log(`ffmpeg stdout: ${data.toString()}`);
   });
+
+  ffmpeg.stderr.on("data", (data) => {
+    console.log(`ffmpeg stderr: ${data.toString()}`);
+  });
+
+  ffmpeg.on("error", (err) => {
+    reject(err);
+  });
+
+  ffmpeg.on("close", (code) => {
+    if (code === 0) {
+      resolve();
+    } else {
+      reject(new Error(`ffmpeg exited with code ${code}`));
+    }
+  });
+});
 
   console.log("✅ FINAL VIDEO READY");
 
