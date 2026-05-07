@@ -1,4 +1,4 @@
-const API_URL = "https://ai-reel-studio-production.up.railway.app/generate-video";
+const API_BASE = "https://ai-reel-studio-production.up.railway.app";
 
 const btn = document.getElementById("generateBtn");
 const input = document.getElementById("ideaInput");
@@ -13,13 +13,14 @@ btn.onclick = async () => {
     return;
   }
 
+  btn.disabled = true;
   status.innerText = "⏳ Generating...";
   video.style.display = "none";
   video.removeAttribute("src");
   video.load();
 
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(`${API_BASE}/generate-video`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -33,15 +34,32 @@ btn.onclick = async () => {
       throw new Error(data?.error || "Failed request");
     }
 
-    const videoUrl = new URL(data.videoUrl, API_URL).href;
+    const jobId = data.jobId;
 
-    video.src = videoUrl;
-    video.style.display = "block";
-    video.load();
+    const poll = async () => {
+      const check = await fetch(`${API_BASE}/status/${jobId}`);
+      const result = await check.json();
 
-    status.innerText = "✅ Video ready";
+      if (result.status === "done") {
+        video.src = `${API_BASE}${result.videoUrl}`;
+        video.style.display = "block";
+        video.load();
+        status.innerText = "✅ Video ready";
+        btn.disabled = false;
+        return;
+      }
+
+      if (result.status === "error") {
+        throw new Error(result.error || "Render failed");
+      }
+
+      setTimeout(poll, 3000);
+    };
+
+    poll();
   } catch (err) {
     console.error(err);
     status.innerText = `❌ Failed to generate video: ${err.message}`;
+    btn.disabled = false;
   }
 };

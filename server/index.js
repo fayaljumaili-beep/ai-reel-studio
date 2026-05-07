@@ -4,31 +4,54 @@ import dotenv from "dotenv";
 import axios from "axios";
 import fs from "fs";
 import { exec } from "child_process";
+import path from "path";
 
 dotenv.config();
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
+const __dirname = path.resolve();
+
+// Simple in-memory job store
+const jobs = new Map();
 
 app.get("/", (req, res) => {
   res.send("AI Reel Generator Backend Running 🚀");
 });
 
-app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
+app.get("/status/:jobId", (req, res) => {
+  const job = jobs.get(req.params.jobId);
 
+  if (!job) {
+    return res.status(404).json({ status: "not_found" });
+  }
+
+  res.json(job);
+});
+
+app.post("/generate-video", async (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt || !prompt.trim()) {
+    return res.status(400).json({ success: false, error: "Prompt is required" });
+  }
+
+  const jobId = Date.now().toString();
+  jobs.set(jobId, { status: "processing" });
+
+  res.json({ success: true, jobId });
+
+  try {
     console.log("🔥 START:", prompt);
 
-    // -----------------------------------
-    // ELEVENLABS VOICE GENERATION
-    // -----------------------------------
-
     const VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
+    const voiceFile = path.join(__dirname, "voice.mp3");
+    const outputFile = path.join(__dirname, "output.mp4");
+    const sampleImage = path.join(__dirname, "sample.jpg");
+    const musicFile = path.join(__dirname, "server", "music.mp3");
 
     const voiceResponse = await axios({
       method: "POST",
@@ -49,36 +72,27 @@ app.post("/generate-video", async (req, res) => {
       },
     });
 
-    fs.writeFileSync("voice.mp3", voiceResponse.data);
-
+    fs.writeFileSync(voiceFile, voiceResponse.data);
     console.log("🎤 Voice ready");
 
-    // -----------------------------------
-    // CHECK FILES
-    // -----------------------------------
-
-    if (!fs.existsSync("sample.jpg")) {
+    if (!fs.existsSync(sampleImage)) {
       throw new Error("sample.jpg missing");
     }
 
-    if (!fs.existsSync("server/music.mp3")) {
+    if (!fs.existsSync(musicFile)) {
       throw new Error("server/music.mp3 missing");
     }
 
     console.log("🖼️ Image exists");
     console.log("🎵 Music exists");
 
-    // -----------------------------------
-    // GENERATE VIDEO
-    // -----------------------------------
-
     await new Promise((resolve, reject) => {
       exec(
         `
 ffmpeg -y \
--loop 1 -i sample.jpg \
--i voice.mp3 \
--stream_loop -1 -i server/music.mp3 \
+-loop 1 -i "${sampleImage}" \
+-i "${voiceFile}" \
+-stream_loop -1 -i "${musicFile}" \
 -filter_complex "
 [0:v]scale=1080:1920,format=yuv420p[v];
 [1:a]volume=1[a1];
@@ -91,8 +105,8 @@ ffmpeg -y \
 -c:v libx264 \
 -c:a aac \
 -pix_fmt yuv420p \
-output.mp4
-`,
+"${outputFile}"
+        `,
         (error, stdout, stderr) => {
           if (error) {
             console.log(stderr);
@@ -105,21 +119,20 @@ output.mp4
       );
     });
 
-    res.json({
-      success: true,
-      videoUrl: "/output.mp4",
+    jobs.set(jobId, {
+      status: "done",
+      videoUrl: `/output.mp4?ts=${Date.now()}`,
     });
   } catch (error) {
     console.error("❌ ERROR:", error);
-
-    res.status(500).json({
-      success: false,
+    jobs.set(jobId, {
+      status: "error",
       error: error.message,
     });
   }
 });
 
-app.use(express.static("."));
+app.use(express.static(__dirname));
 
 app.listen(PORT, () => {
   console.log("🚀 Server running on", PORT);
