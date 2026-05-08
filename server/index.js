@@ -31,7 +31,7 @@ app.use(express.static(publicDir));
 
 const jobs = new Map();
 
-function sanitizeText(text = "") {
+function sanitizeDrawtext(text = "") {
   return text
     .replace(/\\/g, "\\\\")
     .replace(/:/g, "\\:")
@@ -41,15 +41,14 @@ function sanitizeText(text = "") {
     .trim();
 }
 
-function buildReelScript(prompt) {
+function buildScenes(prompt) {
   const topic = prompt.trim();
 
   return [
-    `Nobody tells you this about ${topic}.`,
-    `The people who win are the ones who stay consistent longer than everyone else.`,
-    `This is not just a vibe. It is a standard.`,
-    `Save this and come back when you are ready to level up.`,
-  ].join(" ");
+    `${topic}, cinematic opening shot, moody lighting, premium social reel, vertical composition, realistic, high contrast`,
+    `${topic}, close-up detail shot, dramatic movement, shallow depth of field, luxury creator aesthetic, vertical reel`,
+    `${topic}, powerful final shot, cinematic lighting, premium finish, social media reel, realistic vertical frame`,
+  ];
 }
 
 async function generateScript(prompt) {
@@ -58,8 +57,19 @@ async function generateScript(prompt) {
     messages: [
       {
         role: "system",
-        content:
-          "You write short-form viral reel scripts. Keep it cinematic, natural, punchy, and easy to speak aloud. No hashtags. No emojis. No quotation marks.",
+        content: `
+You write short-form viral reel scripts.
+
+Rules:
+- 3 short sentences maximum
+- cinematic
+- natural spoken English
+- motivational or luxury tone
+- no hashtags
+- no emojis
+- no quotation marks
+- keep it punchy and easy to narrate
+        `.trim(),
       },
       {
         role: "user",
@@ -72,8 +82,6 @@ async function generateScript(prompt) {
 }
 
 async function generateImage(prompt, imagePath) {
-  console.log("🖼️ Generating AI image...");
-
   const result = await openai.images.generate({
     model: "gpt-image-1",
     prompt: `
@@ -94,32 +102,41 @@ ${prompt}
 
   const imageBase64 = result.data[0].b64_json;
   fs.writeFileSync(imagePath, Buffer.from(imageBase64, "base64"));
-
-  console.log("✅ AI image ready");
 }
 
 async function generateVoice(text, audioPath) {
-  console.log("🎤 Generating voice...");
-
   const mp3 = await openai.audio.speech.create({
-    model: "tts-1",
-    voice: "alloy",
+    model: "gpt-4o-mini-tts",
+    voice: "marin",
     input: text,
+    instructions:
+      "Speak in a confident, cinematic, motivational tone. Keep it natural, clear, and premium.",
   });
 
   const buffer = Buffer.from(await mp3.arrayBuffer());
   fs.writeFileSync(audioPath, buffer);
+}
 
-  console.log("✅ Voice ready");
+async function runFfmpeg(args) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn("ffmpeg", args);
+
+    ffmpeg.stderr.on("data", (data) => {
+      console.log("ffmpeg stderr:", data.toString());
+    });
+
+    ffmpeg.on("error", reject);
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited with code ${code}`));
+    });
+  });
 }
 
 async function generateVideo(jobId, prompt) {
   try {
     console.log("🔥 START:", prompt);
-
-    const imagePath = path.join(publicDir, `${jobId}.png`);
-    const audioPath = path.join(publicDir, `${jobId}.mp3`);
-    const videoPath = path.join(publicDir, `${jobId}.mp4`);
 
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is missing");
@@ -129,63 +146,67 @@ async function generateVideo(jobId, prompt) {
       throw new Error("music.mp3 missing in project root");
     }
 
+    const sceneFiles = [
+      path.join(publicDir, `${jobId}-scene-1.png`),
+      path.join(publicDir, `${jobId}-scene-2.png`),
+      path.join(publicDir, `${jobId}-scene-3.png`),
+    ];
+
+    const voiceFile = path.join(publicDir, `${jobId}.mp3`);
+    const outputFile = path.join(publicDir, `${jobId}.mp4`);
+
+    const scenes = buildScenes(prompt);
     const script = await generateScript(prompt);
+
     console.log("📝 Script ready");
+    console.log("🎬 Scenes ready");
 
-    await generateImage(prompt, imagePath);
+    for (let i = 0; i < scenes.length; i += 1) {
+      console.log(`🖼️ Generating scene ${i + 1}...`);
+      await generateImage(scenes[i], sceneFiles[i]);
+      console.log(`✅ Scene ${i + 1} ready`);
+    }
 
-    await generateVoice(script, audioPath);
+    console.log("🎤 Generating voice...");
+    await generateVoice(script, voiceFile);
+    console.log("✅ Voice ready");
 
-    const captionText = sanitizeText(prompt.toUpperCase().slice(0, 80));
+    const captionText = sanitizeDrawtext(prompt.toUpperCase().slice(0, 80));
 
     console.log("🎬 Starting ffmpeg...");
 
     const ffmpegArgs = [
       "-y",
-      "-loop",
-      "1",
-      "-i",
-      imagePath,
-      "-i",
-      audioPath,
-      "-stream_loop",
-      "-1",
-      "-i",
-      musicFile,
+
+      "-loop", "1", "-t", "3.4", "-i", sceneFiles[0],
+      "-loop", "1", "-t", "3.4", "-i", sceneFiles[1],
+      "-loop", "1", "-t", "3.4", "-i", sceneFiles[2],
+      "-i", voiceFile,
+      "-stream_loop", "-1", "-i", musicFile,
+
       "-filter_complex",
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=250:s=1080x1920,fps=30,eq=contrast=1.08:brightness=0.02:saturation=1.15,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.40:boxborderw=20[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
-      "-map",
-      "[v]",
-      "-map",
-      "[a]",
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-c:a",
-      "aac",
+      [
+        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v0]`,
+        `[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v1]`,
+        `[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v2]`,
+        `[v0][v1][v2]concat=n=3:v=1:a=0,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.40:boxborderw=20[v]`,
+        `[3:a]volume=1[a1]`,
+        `[4:a]volume=0.15[a2]`,
+        `[a1][a2]amix=inputs=2:duration=longest:dropout_transition=2[a]`,
+      ].join(";"),
+
+      "-map", "[v]",
+      "-map", "[a]",
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
       "-shortest",
-      "-t",
-      "10",
-      "-movflags",
-      "+faststart",
-      videoPath,
+      "-t", "10",
+      "-movflags", "+faststart",
+      outputFile,
     ];
 
-    await new Promise((resolve, reject) => {
-      const ffmpeg = spawn("ffmpeg", ffmpegArgs);
-
-      ffmpeg.stderr.on("data", (data) => {
-        console.log("ffmpeg stderr:", data.toString());
-      });
-
-      ffmpeg.on("error", reject);
-
-      ffmpeg.on("close", (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`ffmpeg exited with code ${code}`));
-      });
-    });
+    await runFfmpeg(ffmpegArgs);
 
     console.log("✅ Video complete");
 
@@ -194,18 +215,17 @@ async function generateVideo(jobId, prompt) {
       videoUrl: `/${jobId}.mp4`,
     });
 
-    try {
-      fs.unlinkSync(imagePath);
-    } catch {}
-
-    try {
-      fs.unlinkSync(audioPath);
-    } catch {}
+    for (const file of [...sceneFiles, voiceFile]) {
+      try {
+        fs.unlinkSync(file);
+      } catch {}
+    }
   } catch (err) {
     console.error("❌ JOB ERROR:", err);
+
     jobs.set(jobId, {
       status: "error",
-      error: err.message,
+      error: err.message || "Video generation failed",
     });
   }
 }
