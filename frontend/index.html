@@ -1,51 +1,95 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>AI Reel Generator</title>
-  <style>
-    body {
-      background: black;
-      color: white;
-      text-align: center;
-      font-family: Arial;
-    }
+<!doctype html>
+        margin-bottom: 6px;
+      }
 
-    input {
-      padding: 10px;
-      width: 250px;
-      border-radius: 5px;
-      border: none;
-    }
+      .stat span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
 
-    button {
-      padding: 10px 20px;
-      background: hotpink;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
+      .footer-note {
+        text-align: center;
+        color: rgba(245, 247, 255, 0.42);
+        font-size: 12px;
+        margin-top: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="eyebrow">⚡ AI reel generator for creators</div>
+        <h1 class="logo">AI Reel Studio</h1>
+        <p class="tagline">
+          Turn a single idea into a cinematic reel with AI visuals, voice, captions, and music — built for social content that feels premium.
+        </p>
+      </section>
 
-    video {
-      margin-top: 20px;
-      width: 300px;
-      border-radius: 10px;
-    }
-  </style>
-</head>
+      <section class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <p class="section-title">Create your reel</p>
+            <div class="prompt-wrap">
+              <textarea
+                id="ideaInput"
+                placeholder="Describe your viral reel idea...\n\nExamples: luxury billionaire lifestyle, gym motivation, dark feminine energy, cyberpunk city, millionaire mindset"
+              ></textarea>
 
-<body>
+              <div class="presets" aria-label="Prompt presets">
+                <button class="preset" data-preset="luxury billionaire lifestyle">Luxury</button>
+                <button class="preset" data-preset="gym motivation">Gym</button>
+                <button class="preset" data-preset="dark feminine energy">Dark</button>
+                <button class="preset" data-preset="cyberpunk city">Cyberpunk</button>
+                <button class="preset" data-preset="millionaire mindset">Hustle</button>
+                <button class="preset" data-preset="cinematic travel reel">Cinematic</button>
+              </div>
 
-<h1>🎬 AI Reel Generator</h1>
+              <div class="actions">
+                <button id="generateBtn" class="generate-btn">Generate reel</button>
+                <div class="hint">Premium AI visuals • voice • captions • music</div>
+              </div>
 
-<input id="ideaInput" />
-<button id="generateBtn">Generate</button>
+              <div id="status"></div>
+            </div>
+          </div>
+        </div>
 
-<p id="status"></p>
+        <div class="card preview">
+          <div class="card-inner">
+            <p class="section-title">Preview</p>
+            <div class="video-shell">
+              <video id="videoPlayer" controls playsinline></video>
+            </div>
+          </div>
 
-<video id="videoPlayer" controls style="display:none; width:300px;"></video>
+          <div class="card-inner side-copy">
+            <div class="stat">
+              <strong>Viral-ready output</strong>
+              <span>Built to generate short-form reels with a premium, creator-first feel.</span>
+            </div>
+            <div class="stat">
+              <strong>Fast prompt workflow</strong>
+              <span>Start with one idea and let the app handle the rest automatically.</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-<script src="index.js"></script>
+      <div class="footer-note">AI Reel Studio • launch version</div>
+    </main>
 
-</body>
+    <script>
+      const ideaInput = document.getElementById('ideaInput');
+      document.querySelectorAll('.preset').forEach((button) => {
+        button.addEventListener('click', () => {
+          const preset = button.getAttribute('data-preset') || '';
+          ideaInput.value = preset;
+          ideaInput.focus();
+        });
+      });
+    </script>
+
+    <script src="./index.js"></script>
+  </body>
 </html>
