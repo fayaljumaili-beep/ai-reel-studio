@@ -127,7 +127,7 @@ btn.onclick = async () => {
     setStatus("⏳ Rendering...");
 
     const poll = async () => {
-      const check = await fetch(`${API_BASE}/status/${jobId}`);
+      const check = await fetch(`${API_BASE}/job/${jobId}`);
       const result = await check.json();
 
       if (result.status === "done") {
