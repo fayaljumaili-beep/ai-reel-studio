@@ -89,6 +89,17 @@ function escapeForDrawtext(text) {
     .replace(/\n/g, " ");
 }
 
+function buildReelScript(prompt) {
+  const topic = prompt.trim();
+
+  return {
+    hook: `Nobody tells you this about ${topic}.`,
+    body: `The people who win are usually the ones who stayed consistent longer than everyone else.`,
+    emotion: `${topic} is not just a vibe — it is a standard.`,
+    cta: `Save this and come back when you are ready to level up.`,
+  };
+}
+
 async function generateVideo(jobId, prompt) {
   console.log("🔥 START:", prompt);
 
@@ -106,12 +117,17 @@ async function generateVideo(jobId, prompt) {
     throw new Error("music.mp3 missing in project root");
   }
 
+  const script = buildReelScript(prompt);
+  const voiceText = `${script.hook} ${script.body} ${script.emotion} ${script.cta}`;
+
   // -----------------------------------
   // GENERATE AI IMAGE
   // -----------------------------------
   console.log("🖼️ Generating AI image...");
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    prompt
+  )}`;
 
   const imageResponse = await axios({
     method: "GET",
@@ -138,7 +154,7 @@ async function generateVideo(jobId, prompt) {
     },
     responseType: "arraybuffer",
     data: {
-      text: `Success starts with discipline. ${prompt} is your opportunity to level up and dominate your future.`,
+      text: voiceText,
       model_id: "eleven_multilingual_v2",
       voice_settings: {
         stability: 0.5,
@@ -154,48 +170,64 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   // CAPTION
   // -----------------------------------
-  const captionText = escapeForDrawtext(prompt.toUpperCase());
+  const captionText = escapeForDrawtext(script.hook.toUpperCase());
 
   // -----------------------------------
   // GENERATE VIDEO
   // -----------------------------------
   console.log("🎬 Starting ffmpeg...");
 
-await new Promise((resolve, reject) => {
-  const ffmpeg = spawn("ffmpeg", [
-    "-loop", "1",
-    "-i", imageFile,
-    "-i", voiceFile,
-    "-i", musicFile,
+  await new Promise((resolve, reject) => {
+    const ffmpeg = spawn("ffmpeg", [
+      "-y",
+      "-loop",
+      "1",
+      "-i",
+      imageFile,
+      "-i",
+      voiceFile,
+      "-stream_loop",
+      "-1",
+      "-i",
+      musicFile,
+      "-filter_complex",
+      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
+      "-map",
+      "[v]",
+      "-map",
+      "[a]",
+      "-c:v",
+      "libx264",
+      "-c:a",
+      "aac",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "-shortest",
+      outputFile,
+    ]);
 
-    // video settings
-    "-c:v", "libx264",
-    "-t", "10",                // HARD 10 second limit
-    "-pix_fmt", "yuv420p",
-    "-vf",
-    `scale=720:1280,format=yuv420p,drawtext=text='${prompt.toUpperCase()}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-120`,
+    ffmpeg.stdout.on("data", (data) => {
+      console.log(`ffmpeg stdout: ${data.toString()}`);
+    });
 
-    // audio
-    "-filter_complex",
-    "[2:a]volume=0.15[music];[1:a][music]amix=inputs=2:duration=shortest",
+    ffmpeg.stderr.on("data", (data) => {
+      console.log(`ffmpeg stderr: ${data.toString()}`);
+    });
 
-    // output
-    "-shortest",
-    outputFile
-  ]);
+    ffmpeg.on("error", (err) => {
+      reject(err);
+    });
 
-  ffmpeg.stderr.on("data", (data) => {
-    console.log("ffmpeg stderr:", data.toString());
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`ffmpeg exited with code ${code}`));
+      }
+    });
   });
-
-  ffmpeg.on("close", (code) => {
-    if (code === 0) {
-      resolve();
-    } else {
-      reject(new Error(`ffmpeg exited with code ${code}`));
-    }
-  });
-});
 
   console.log("✅ FINAL VIDEO READY");
 
