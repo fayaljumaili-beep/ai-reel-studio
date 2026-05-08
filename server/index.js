@@ -19,7 +19,6 @@ const PORT = process.env.PORT || 8080;
 const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const videosDir = path.join(publicDir, "videos");
-
 const musicFile = path.join(rootDir, "music.mp3");
 
 if (!fs.existsSync(publicDir)) {
@@ -81,6 +80,15 @@ app.post("/generate-video", (req, res) => {
   });
 });
 
+function escapeForDrawtext(text) {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'")
+    .replace(/%/g, "\\%")
+    .replace(/\n/g, " ");
+}
+
 async function generateVideo(jobId, prompt) {
   console.log("🔥 START:", prompt);
 
@@ -101,12 +109,9 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   // GENERATE AI IMAGE
   // -----------------------------------
-
   console.log("🖼️ Generating AI image...");
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    prompt
-  )}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
   const imageResponse = await axios({
     method: "GET",
@@ -116,13 +121,11 @@ async function generateVideo(jobId, prompt) {
   });
 
   fs.writeFileSync(imageFile, imageResponse.data);
-
   console.log("🖼️ AI image ready");
 
   // -----------------------------------
   // GENERATE VOICE
   // -----------------------------------
-
   console.log("🎤 Generating voice...");
 
   const voiceResponse = await axios({
@@ -146,63 +149,46 @@ async function generateVideo(jobId, prompt) {
   });
 
   fs.writeFileSync(voiceFile, voiceResponse.data);
-
   console.log("🎤 Voice ready");
 
   // -----------------------------------
-  // VIDEO CAPTION
+  // CAPTION
   // -----------------------------------
-
-  const captionText = prompt.toUpperCase();
+  const captionText = escapeForDrawtext(prompt.toUpperCase());
 
   // -----------------------------------
   // GENERATE VIDEO
   // -----------------------------------
-
   console.log("🎬 Starting ffmpeg...");
 
   await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
       "-y",
-
       "-loop",
       "1",
-
       "-i",
       imageFile,
-
       "-i",
       voiceFile,
-
       "-stream_loop",
       "-1",
-
       "-i",
       musicFile,
-
       "-filter_complex",
       `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
-
       "-map",
       "[v]",
-
       "-map",
       "[a]",
-
-      "-shortest",
-
       "-c:v",
       "libx264",
-
       "-c:a",
       "aac",
-
       "-pix_fmt",
       "yuv420p",
-
       "-movflags",
       "+faststart",
-
+      "-shortest",
       outputFile,
     ]);
 
@@ -237,7 +223,6 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   // CLEANUP
   // -----------------------------------
-
   try {
     fs.unlinkSync(voiceFile);
   } catch {}
