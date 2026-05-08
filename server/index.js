@@ -21,7 +21,7 @@ const openai = new OpenAI({
 
 const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
-const musicFile = path.join(rootDir, "music.mp3");
+const musicFile = path.join(rootDir, "server", "music.mp3");
 
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
@@ -45,9 +45,9 @@ function buildScenes(prompt) {
   const topic = prompt.trim();
 
   return [
-    `${topic}, cinematic opening shot, moody lighting, premium social reel, vertical composition, realistic, high contrast`,
-    `${topic}, close-up detail shot, dramatic movement, shallow depth of field, luxury creator aesthetic, vertical reel`,
-    `${topic}, powerful final shot, cinematic lighting, premium finish, social media reel, realistic vertical frame`,
+    `${topic}, cinematic opening shot, moody lighting, realistic fitness aesthetic, luxury creator style, dramatic shadows`,
+    `${topic}, intense close-up gym training moment, realistic sweat, cinematic depth of field, premium reel aesthetic`,
+    `${topic}, powerful final hero shot, luxury cinematic lighting, ultra realistic social media reel style`,
   ];
 }
 
@@ -58,18 +58,18 @@ async function generateScript(prompt) {
       {
         role: "system",
         content: `
-You write short-form viral reel scripts.
+You create cinematic short-form reel narration.
 
 Rules:
-- 3 short sentences maximum
-- cinematic
+- maximum 3 short sentences
+- motivational tone
+- premium creator energy
 - natural spoken English
-- motivational or luxury tone
 - no hashtags
 - no emojis
 - no quotation marks
-- keep it punchy and easy to narrate
-        `.trim(),
+- concise and punchy
+        `,
       },
       {
         role: "user",
@@ -85,51 +85,56 @@ async function generateImage(prompt, imagePath) {
   const result = await openai.images.generate({
     model: "gpt-image-1",
     prompt: `
-ultra realistic cinematic vertical photography,
-social media reel aesthetic,
-moody lighting,
-realistic human proportions,
-realistic skin texture,
-shallow depth of field,
-cinematic composition,
+ultra realistic cinematic photography,
+vertical social media reel,
+real human proportions,
+cinematic lighting,
 premium creator aesthetic,
-highly detailed,
-professional camera shot,
+high detail,
+professional photography,
+moody contrast,
+shallow depth of field,
 ${prompt}
-`.trim(),
+    `,
     size: "1024x1536",
   });
 
   const imageBase64 = result.data[0].b64_json;
-  fs.writeFileSync(imagePath, Buffer.from(imageBase64, "base64"));
+
+  fs.writeFileSync(
+    imagePath,
+    Buffer.from(imageBase64, "base64")
+  );
 }
 
-async function generateVoice(text, audioPath) {
-  const mp3 = await openai.audio.speech.create({
+async function generateVoice(text, outputPath) {
+  const speech = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
     voice: "marin",
     input: text,
     instructions:
-      "Speak in a confident, cinematic, motivational tone. Keep it natural, clear, and premium.",
+      "Speak with a confident cinematic motivational tone. Natural pacing. Premium creator style.",
   });
 
-  const buffer = Buffer.from(await mp3.arrayBuffer());
-  fs.writeFileSync(audioPath, buffer);
+  const buffer = Buffer.from(await speech.arrayBuffer());
+
+  fs.writeFileSync(outputPath, buffer);
 }
 
-async function runFfmpeg(args) {
+async function runFFmpeg(args) {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", args);
 
     ffmpeg.stderr.on("data", (data) => {
-      console.log("ffmpeg stderr:", data.toString());
+      console.log(data.toString());
     });
 
-    ffmpeg.on("error", reject);
-
     ffmpeg.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited with code ${code}`));
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`FFmpeg exited with code ${code}`));
+      }
     });
   });
 }
@@ -138,75 +143,106 @@ async function generateVideo(jobId, prompt) {
   try {
     console.log("🔥 START:", prompt);
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is missing");
-    }
+    const script = await generateScript(prompt);
 
-    if (!fs.existsSync(musicFile)) {
-      throw new Error("music.mp3 missing in project root");
-    }
+    console.log("📝 Script ready");
 
-    const sceneFiles = [
-      path.join(publicDir, `${jobId}-scene-1.png`),
-      path.join(publicDir, `${jobId}-scene-2.png`),
-      path.join(publicDir, `${jobId}-scene-3.png`),
-    ];
+    const scenes = buildScenes(prompt);
+
+    const scene1 = path.join(publicDir, `${jobId}-1.png`);
+    const scene2 = path.join(publicDir, `${jobId}-2.png`);
+    const scene3 = path.join(publicDir, `${jobId}-3.png`);
 
     const voiceFile = path.join(publicDir, `${jobId}.mp3`);
     const outputFile = path.join(publicDir, `${jobId}.mp4`);
 
-    const scenes = buildScenes(prompt);
-    const script = await generateScript(prompt);
+    console.log("🖼️ Generating scene 1...");
+    await generateImage(scenes[0], scene1);
+    console.log("✅ Scene 1 ready");
 
-    console.log("📝 Script ready");
-    console.log("🎬 Scenes ready");
+    console.log("🖼️ Generating scene 2...");
+    await generateImage(scenes[1], scene2);
+    console.log("✅ Scene 2 ready");
 
-    for (let i = 0; i < scenes.length; i += 1) {
-      console.log(`🖼️ Generating scene ${i + 1}...`);
-      await generateImage(scenes[i], sceneFiles[i]);
-      console.log(`✅ Scene ${i + 1} ready`);
-    }
+    console.log("🖼️ Generating scene 3...");
+    await generateImage(scenes[2], scene3);
+    console.log("✅ Scene 3 ready");
 
     console.log("🎤 Generating voice...");
     await generateVoice(script, voiceFile);
     console.log("✅ Voice ready");
 
-    const captionText = sanitizeDrawtext(prompt.toUpperCase().slice(0, 80));
+    const captionText = sanitizeDrawtext(
+      prompt.toUpperCase().slice(0, 70)
+    );
 
     console.log("🎬 Starting ffmpeg...");
 
-    const ffmpegArgs = [
+    await runFFmpeg([
       "-y",
 
-      "-loop", "1", "-t", "3.4", "-i", sceneFiles[0],
-      "-loop", "1", "-t", "3.4", "-i", sceneFiles[1],
-      "-loop", "1", "-t", "3.4", "-i", sceneFiles[2],
+      "-loop", "1",
+      "-t", "3.3",
+      "-i", scene1,
+
+      "-loop", "1",
+      "-t", "3.3",
+      "-i", scene2,
+
+      "-loop", "1",
+      "-t", "3.3",
+      "-i", scene3,
+
       "-i", voiceFile,
-      "-stream_loop", "-1", "-i", musicFile,
+
+      "-stream_loop", "-1",
+      "-i", musicFile,
 
       "-filter_complex",
-      [
-        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v0]`,
-        `[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v1]`,
-        `[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0009,1.10)':d=102:s=1080x1920:fps=30,format=yuv420p[v2]`,
-        `[v0][v1][v2]concat=n=3:v=1:a=0,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.40:boxborderw=20[v]`,
-        `[3:a]volume=1[a1]`,
-        `[4:a]volume=0.15[a2]`,
-        `[a1][a2]amix=inputs=2:duration=longest:dropout_transition=2[a]`,
-      ].join(";"),
+      `
+[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v0];
+
+[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v1];
+
+[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v2];
+
+[v0][v1][v2]concat=n=3:v=1:a=0[vv];
+
+[vv]drawtext=
+text='${captionText}':
+fontcolor=white:
+fontsize=54:
+x=(w-text_w)/2:
+y=h-220:
+borderw=4:
+bordercolor=black:
+box=1:
+boxcolor=black@0.45:
+boxborderw=20
+[v];
+
+[3:a]volume=1[a1];
+
+[4:a]volume=0.12[a2];
+
+[a1][a2]amix=inputs=2:duration=first[a]
+      `,
 
       "-map", "[v]",
       "-map", "[a]",
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-shortest",
-      "-t", "10",
-      "-movflags", "+faststart",
-      outputFile,
-    ];
 
-    await runFfmpeg(ffmpegArgs);
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-pix_fmt", "yuv420p",
+
+      "-c:a", "aac",
+
+      "-shortest",
+
+      "-movflags", "+faststart",
+
+      outputFile,
+    ]);
 
     console.log("✅ Video complete");
 
@@ -215,48 +251,58 @@ async function generateVideo(jobId, prompt) {
       videoUrl: `/${jobId}.mp4`,
     });
 
-    for (const file of [...sceneFiles, voiceFile]) {
-      try {
-        fs.unlinkSync(file);
-      } catch {}
-    }
   } catch (err) {
-    console.error("❌ JOB ERROR:", err);
+    console.error("❌ ERROR:", err);
 
     jobs.set(jobId, {
       status: "error",
-      error: err.message || "Video generation failed",
+      error: err.message,
     });
   }
 }
 
 app.get("/", (req, res) => {
-  res.send("AI Reel Generator Backend Running 🚀");
+  res.send("AI Reel Studio backend running 🚀");
 });
 
 app.post("/generate-video", async (req, res) => {
-  const { prompt } = req.body;
+  try {
+    const { prompt } = req.body;
 
-  if (!prompt || !prompt.trim()) {
-    return res.status(400).json({ error: "Prompt required" });
+    if (!prompt) {
+      return res.status(400).json({
+        error: "Prompt required",
+      });
+    }
+
+    const jobId = randomUUID();
+
+    jobs.set(jobId, {
+      status: "processing",
+    });
+
+    generateVideo(jobId, prompt);
+
+    res.json({
+      jobId,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to generate reel",
+    });
   }
-
-  const jobId = randomUUID();
-
-  jobs.set(jobId, {
-    status: "processing",
-  });
-
-  generateVideo(jobId, prompt.trim());
-
-  res.json({ jobId });
 });
 
 app.get("/job/:id", (req, res) => {
   const job = jobs.get(req.params.id);
 
   if (!job) {
-    return res.status(404).json({ error: "Job not found" });
+    return res.status(404).json({
+      error: "Job not found",
+    });
   }
 
   res.json(job);
