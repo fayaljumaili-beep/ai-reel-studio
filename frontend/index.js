@@ -67,9 +67,7 @@ function ensureDownloadButton() {
 
 function hideDownloadButton() {
   const existing = document.getElementById("downloadBtn");
-  if (existing) {
-    existing.style.display = "none";
-  }
+  if (existing) existing.style.display = "none";
 }
 
 function showDownloadButton() {
@@ -131,9 +129,7 @@ btn.onclick = async () => {
       const result = await check.json();
 
       if (result.status === "done") {
-        const separator = result.videoUrl.includes("?") ? "&" : "?";
-        currentVideoUrl = `${API_BASE}${result.videoUrl}${separator}t=${Date.now()}`;
-
+        currentVideoUrl = `${API_BASE}${result.videoUrl}?t=${Date.now()}`;
         video.src = currentVideoUrl;
         video.style.display = "block";
         video.load();
