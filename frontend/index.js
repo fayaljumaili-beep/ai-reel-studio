@@ -9,6 +9,10 @@ let pollTimer = null;
 let currentVideoUrl = null;
 let downloadBtn = null;
 
+function setStatus(message) {
+  status.innerText = message;
+}
+
 function ensureDownloadButton() {
   if (downloadBtn) return downloadBtn;
 
@@ -16,14 +20,15 @@ function ensureDownloadButton() {
   downloadBtn.id = "downloadBtn";
   downloadBtn.textContent = "⬇ Download reel";
   downloadBtn.style.display = "none";
-  downloadBtn.style.marginTop = "12px";
-  downloadBtn.style.padding = "10px 14px";
+  downloadBtn.style.marginTop = "14px";
+  downloadBtn.style.padding = "12px 16px";
   downloadBtn.style.border = "none";
-  downloadBtn.style.borderRadius = "10px";
-  downloadBtn.style.background = "#ffffff";
-  downloadBtn.style.color = "#000000";
+  downloadBtn.style.borderRadius = "14px";
+  downloadBtn.style.background = "linear-gradient(135deg, #ff4fd8, #8b5cf6)";
+  downloadBtn.style.color = "#fff";
   downloadBtn.style.cursor = "pointer";
-  downloadBtn.style.fontWeight = "600";
+  downloadBtn.style.fontWeight = "700";
+  downloadBtn.style.boxShadow = "0 18px 40px rgba(139, 92, 246, 0.25)";
 
   downloadBtn.onclick = async () => {
     if (!currentVideoUrl) return;
@@ -60,11 +65,32 @@ function ensureDownloadButton() {
   return downloadBtn;
 }
 
+function hideDownloadButton() {
+  const existing = document.getElementById("downloadBtn");
+  if (existing) {
+    existing.style.display = "none";
+  }
+}
+
+function showDownloadButton() {
+  const btnEl = ensureDownloadButton();
+  btnEl.style.display = "inline-block";
+  btnEl.textContent = "⬇ Download reel";
+}
+
+document.querySelectorAll(".preset").forEach((button) => {
+  button.addEventListener("click", () => {
+    const preset = button.getAttribute("data-preset") || "";
+    input.value = preset;
+    input.focus();
+  });
+});
+
 btn.onclick = async () => {
   const idea = input.value.trim();
 
   if (!idea) {
-    status.innerText = "❌ Please enter an idea";
+    setStatus("❌ Please enter an idea");
     return;
   }
 
@@ -74,11 +100,10 @@ btn.onclick = async () => {
   }
 
   currentVideoUrl = null;
-  const existingDownloadBtn = document.getElementById("downloadBtn");
-  if (existingDownloadBtn) existingDownloadBtn.style.display = "none";
+  hideDownloadButton();
 
   btn.disabled = true;
-  status.innerText = "⏳ Generating...";
+  setStatus("⏳ Generating...");
   video.style.display = "none";
   video.removeAttribute("src");
   video.load();
@@ -99,7 +124,7 @@ btn.onclick = async () => {
     }
 
     const jobId = data.jobId;
-    status.innerText = "⏳ Rendering...";
+    setStatus("⏳ Rendering...");
 
     const poll = async () => {
       const check = await fetch(`${API_BASE}/status/${jobId}`);
@@ -110,12 +135,9 @@ btn.onclick = async () => {
         video.src = currentVideoUrl;
         video.style.display = "block";
         video.load();
-        status.innerText = "✅ Video ready";
+        setStatus("✅ Video ready");
         btn.disabled = false;
-
-        const btnEl = ensureDownloadButton();
-        btnEl.style.display = "inline-block";
-        btnEl.textContent = "⬇ Download reel";
+        showDownloadButton();
         return;
       }
 
@@ -129,7 +151,7 @@ btn.onclick = async () => {
     poll();
   } catch (err) {
     console.error(err);
-    status.innerText = `❌ Failed to generate video: ${err.message}`;
+    setStatus(`❌ Failed to generate video: ${err.message}`);
     btn.disabled = false;
   }
 };
