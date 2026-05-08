@@ -216,8 +216,24 @@ async function generateVideo(jobId, prompt) {
       "yuv420p",
       "-movflags",
       "+faststart",
-      "-shortest",
-      outputFile,
+      "-t",
+"10",
+
+"-c:v",
+"libx264",
+
+"-c:a",
+"aac",
+
+"-pix_fmt",
+"yuv420p",
+
+"-movflags",
+"+faststart",
+
+"-shortest",
+
+outputFile
     ]);
 
     ffmpeg.stdout.on("data", (data) => {
