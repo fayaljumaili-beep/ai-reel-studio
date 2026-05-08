@@ -161,57 +161,41 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   console.log("🎬 Starting ffmpeg...");
 
-  await new Promise((resolve, reject) => {
-    const ffmpeg = spawn("ffmpeg", [
-      "-y",
-      "-loop",
-      "1",
-      "-i",
-      imageFile,
-      "-i",
-      voiceFile,
-      "-stream_loop",
-      "-1",
-      "-i",
-      musicFile,
-      "-filter_complex",
-      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
-      "-map",
-      "[v]",
-      "-map",
-      "[a]",
-      "-c:v",
-      "libx264",
-      "-c:a",
-      "aac",
-      "-pix_fmt",
-      "yuv420p",
-      "-movflags",
-      "+faststart",
-      "-shortest",
-      outputFile,
-    ]);
+await new Promise((resolve, reject) => {
+  const ffmpeg = spawn("ffmpeg", [
+    "-loop", "1",
+    "-i", imageFile,
+    "-i", voiceFile,
+    "-i", musicFile,
 
-    ffmpeg.stdout.on("data", (data) => {
-      console.log(`ffmpeg stdout: ${data.toString()}`);
-    });
+    // video settings
+    "-c:v", "libx264",
+    "-t", "10",                // HARD 10 second limit
+    "-pix_fmt", "yuv420p",
+    "-vf",
+    `scale=720:1280,format=yuv420p,drawtext=text='${prompt.toUpperCase()}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=h-120`,
 
-    ffmpeg.stderr.on("data", (data) => {
-      console.log(`ffmpeg stderr: ${data.toString()}`);
-    });
+    // audio
+    "-filter_complex",
+    "[2:a]volume=0.15[music];[1:a][music]amix=inputs=2:duration=shortest",
 
-    ffmpeg.on("error", (err) => {
-      reject(err);
-    });
+    // output
+    "-shortest",
+    outputFile
+  ]);
 
-    ffmpeg.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`ffmpeg exited with code ${code}`));
-      }
-    });
+  ffmpeg.stderr.on("data", (data) => {
+    console.log("ffmpeg stderr:", data.toString());
   });
+
+  ffmpeg.on("close", (code) => {
+    if (code === 0) {
+      resolve();
+    } else {
+      reject(new Error(`ffmpeg exited with code ${code}`));
+    }
+  });
+});
 
   console.log("✅ FINAL VIDEO READY");
 
