@@ -131,10 +131,17 @@ btn.onclick = async () => {
       const result = await check.json();
 
       if (result.status === "done") {
-        currentVideoUrl = `${API_BASE}${result.videoUrl}`;
+        const separator = result.videoUrl.includes("?") ? "&" : "?";
+        currentVideoUrl = `${API_BASE}${result.videoUrl}${separator}t=${Date.now()}`;
+
         video.src = currentVideoUrl;
         video.style.display = "block";
         video.load();
+
+        video.onloadeddata = () => {
+          video.play().catch(() => {});
+        };
+
         setStatus("✅ Video ready");
         btn.disabled = false;
         showDownloadButton();
