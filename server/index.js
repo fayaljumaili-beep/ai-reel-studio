@@ -45,9 +45,9 @@ function buildScenes(prompt) {
   const topic = prompt.trim();
 
   return [
-    `${topic}, cinematic opening shot, moody lighting, realistic fitness aesthetic, luxury creator style, dramatic shadows`,
-    `${topic}, intense close-up gym training moment, realistic sweat, cinematic depth of field, premium reel aesthetic`,
-    `${topic}, powerful final hero shot, luxury cinematic lighting, ultra realistic social media reel style`,
+    `wide establishing shot of ${topic}, luxury gym interior, cinematic, moody, dramatic lighting, vertical reel`,
+    `close-up action shot of ${topic}, intense training, sweat, motion, shallow depth of field, vertical reel`,
+    `hero final shot of ${topic}, confident pose, dramatic lighting, premium cinematic finish, vertical reel`,
   ];
 }
 
@@ -182,11 +182,11 @@ async function generateVideo(jobId, prompt) {
       "-y",
 
       "-loop", "1",
-      "-t", "3.3",
+      "-t", "2.8",
       "-i", scene1,
 
       "-loop", "1",
-      "-t", "3.3",
+      "-t", "2.8",
       "-i", scene2,
 
       "-loop", "1",
@@ -200,11 +200,11 @@ async function generateVideo(jobId, prompt) {
 
       "-filter_complex",
       `
-[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v0];
+[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v0];
 
-[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v1];
+[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v1];
 
-[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=99:s=1080x1920:fps=30,format=yuv420p[v2];
+[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v2];
 
 [v0][v1][v2]concat=n=3:v=1:a=0[vv];
 
