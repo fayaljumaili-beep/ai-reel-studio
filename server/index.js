@@ -86,7 +86,7 @@ function escapeForDrawtext(text) {
     .replace(/:/g, "\\:")
     .replace(/'/g, "\\'")
     .replace(/%/g, "\\%")
-    .replace(/\n/g, " ");
+    .replace(/\n/g, "\\n");
 }
 
 function buildReelScript(prompt) {
@@ -98,6 +98,20 @@ function buildReelScript(prompt) {
     emotion: `${topic} is not just a vibe — it is a standard.`,
     cta: `Save this and come back when you are ready to level up.`,
   };
+}
+
+function makeShortCaption(text) {
+  const words = text.toUpperCase().split(/\s+/).filter(Boolean);
+
+  if (words.length <= 3) {
+    return words.join(" ");
+  }
+
+  const splitIndex = Math.ceil(words.length / 2);
+  const firstLine = words.slice(0, splitIndex).join(" ");
+  const secondLine = words.slice(splitIndex).join(" ");
+
+  return `${firstLine}\n${secondLine}`;
 }
 
 async function generateVideo(jobId, prompt) {
@@ -125,9 +139,7 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   console.log("🖼️ Generating AI image...");
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    prompt
-  )}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
   const imageResponse = await axios({
     method: "GET",
@@ -170,7 +182,7 @@ async function generateVideo(jobId, prompt) {
   // -----------------------------------
   // CAPTION
   // -----------------------------------
-  const captionText = escapeForDrawtext(script.hook.toUpperCase());
+  const captionText = escapeForDrawtext(makeShortCaption(script.hook));
 
   // -----------------------------------
   // GENERATE VIDEO
@@ -179,35 +191,35 @@ async function generateVideo(jobId, prompt) {
 
   await new Promise((resolve, reject) => {
     const ffmpeg = spawn("ffmpeg", [
-  "-y",
-  "-loop",
-  "1",
-  "-i",
-  imageFile,
-  "-i",
-  voiceFile,
-  "-stream_loop",
-  "-1",
-  "-i",
-  musicFile,
-  "-filter_complex",
-  `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=72:borderw=4:bordercolor=black:x=(w-text_w)/2:y=h-300[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
-  "-map",
-  "[v]",
-  "-map",
-  "[a]",
-  "-c:v",
-  "libx264",
-  "-c:a",
-  "aac",
-  "-pix_fmt",
-  "yuv420p",
-  "-movflags",
-  "+faststart",
-  "-t",
-  "10",
-  outputFile,
-]);
+      "-y",
+      "-loop",
+      "1",
+      "-i",
+      imageFile,
+      "-i",
+      voiceFile,
+      "-stream_loop",
+      "-1",
+      "-i",
+      musicFile,
+      "-filter_complex",
+      `[0:v]scale=1080:1920,format=yuv420p,drawtext=text='${captionText}':fontcolor=white:fontsize=54:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-180:line_spacing=12:box=1:boxcolor=black@0.25:boxborderw=18[v];[1:a]volume=1[a1];[2:a]volume=0.15[a2];[a1][a2]amix=inputs=2:duration=shortest[a]`,
+      "-map",
+      "[v]",
+      "-map",
+      "[a]",
+      "-c:v",
+      "libx264",
+      "-c:a",
+      "aac",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "-shortest",
+      outputFile,
+    ]);
+
     ffmpeg.stdout.on("data", (data) => {
       console.log(`ffmpeg stdout: ${data.toString()}`);
     });
