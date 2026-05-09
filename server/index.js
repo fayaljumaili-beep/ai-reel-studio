@@ -182,15 +182,15 @@ async function generateVideo(jobId, prompt) {
       "-y",
 
       "-loop", "1",
-      "-t", "2.8",
+      "-t", "2.5",
       "-i", scene1,
 
       "-loop", "1",
-      "-t", "2.8",
+      "-t", "2.5",
       "-i", scene2,
 
       "-loop", "1",
-      "-t", "3.3",
+      "-t", "2.5",
       "-i", scene3,
 
       "-i", voiceFile,
@@ -200,11 +200,11 @@ async function generateVideo(jobId, prompt) {
 
       "-filter_complex",
       `
-[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v0];
+[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v0];
 
-[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v1];
+[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v1];
 
-[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=84:s=1080x1920:fps=30,format=yuv420p[v2];
+[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v2];
 
 [v0][v1][v2]concat=n=3:v=1:a=0[vv];
 
