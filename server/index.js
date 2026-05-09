@@ -37,6 +37,7 @@ function sanitizeDrawtext(text = "") {
     .replace(/:/g, "\\:")
     .replace(/'/g, "")
     .replace(/%/g, "\\%")
+    .replace(/,/g, "\\,")
     .replace(/\n/g, " ")
     .trim();
 }
@@ -208,18 +209,7 @@ async function generateVideo(jobId, prompt) {
 
 [v0][v1][v2]concat=n=3:v=1:a=0[vv];
 
-[vv]drawtext=
-text='${captionText}':
-fontcolor=white:
-fontsize=54:
-x=(w-text_w)/2:
-y=h-220:
-borderw=4:
-bordercolor=black:
-box=1:
-boxcolor=black@0.45:
-boxborderw=20
-[v];
+[vv]drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20[v];
 
 [3:a]volume=1[a1];
 
