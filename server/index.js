@@ -23,6 +23,10 @@ const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const musicFile = path.join(rootDir, "server", "music.mp3");
 
+const SCENE_COUNT = 12;
+const SCENE_DURATION = 5;
+const TOTAL_DURATION = 60;
+
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
 }
@@ -112,7 +116,6 @@ ${prompt}
   });
 
   const imageBase64 = result.data[0].b64_json;
-
   fs.writeFileSync(imagePath, Buffer.from(imageBase64, "base64"));
 }
 
@@ -126,7 +129,6 @@ async function generateVoice(text, outputPath) {
   });
 
   const buffer = Buffer.from(await speech.arrayBuffer());
-
   fs.writeFileSync(outputPath, buffer);
 }
 
@@ -154,7 +156,7 @@ async function renderSceneClip(imagePath, clipPath, captionText, zoomSpeed) {
     "-loop",
     "1",
     "-t",
-    "5",
+    String(SCENE_DURATION),
     "-i",
     imagePath,
     "-vf",
@@ -215,7 +217,7 @@ async function generateVideo(jobId, prompt) {
         sceneImages[i],
         sceneClips[i],
         captionText,
-        (0.001 + i * 0.00015).toFixed(5)
+        (0.00025 + i * 0.00002).toFixed(5)
       );
       console.log(`✅ Clip ${i + 1} ready`);
     }
@@ -263,7 +265,7 @@ async function generateVideo(jobId, prompt) {
       "-c:a",
       "aac",
       "-t",
-      "60",
+      String(TOTAL_DURATION),
       "-movflags",
       "+faststart",
       outputFile,
