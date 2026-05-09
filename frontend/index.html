@@ -144,6 +144,32 @@
         color: rgba(245, 247, 255, 0.36);
       }
 
+      .mode-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .mode-label {
+        font-size: 13px;
+        color: rgba(245, 247, 255, 0.72);
+      }
+
+      select {
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text);
+        border-radius: 16px;
+        padding: 12px 14px;
+        font-size: 15px;
+        outline: none;
+      }
+
+      select:focus {
+        border-color: rgba(255, 79, 216, 0.7);
+        box-shadow: 0 0 0 4px rgba(255, 79, 216, 0.12);
+      }
+
       .presets {
         display: flex;
         flex-wrap: wrap;
@@ -285,6 +311,14 @@
                 placeholder="Describe your viral reel idea..."
               ></textarea>
 
+              <div class="mode-row">
+                <div class="mode-label">Choose output type</div>
+                <select id="modeSelect">
+                  <option value="image">Image video</option>
+                  <option value="video">Video video</option>
+                </select>
+              </div>
+
               <div class="presets" aria-label="Prompt presets">
                 <button class="preset" data-preset="luxury billionaire lifestyle">Luxury</button>
                 <button class="preset" data-preset="gym motivation">Gym</button>
@@ -330,6 +364,7 @@
 
     <script>
       const ideaInput = document.getElementById("ideaInput");
+      const modeSelect = document.getElementById("modeSelect");
 
       document.querySelectorAll(".preset").forEach((button) => {
         button.addEventListener("click", () => {
