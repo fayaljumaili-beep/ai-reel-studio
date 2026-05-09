@@ -48,7 +48,16 @@ function buildScenes(prompt) {
   return [
     `wide establishing shot of ${topic}, luxury gym interior, cinematic, moody, dramatic lighting, vertical reel`,
     `close-up action shot of ${topic}, intense training, sweat, motion, shallow depth of field, vertical reel`,
+    `side profile action shot of ${topic}, movement, premium cinematic lighting, vertical reel`,
     `hero final shot of ${topic}, confident pose, dramatic lighting, premium cinematic finish, vertical reel`,
+    `low angle shot of ${topic}, powerful posture, cinematic contrast, vertical reel`,
+    `details of hands and weights during ${topic}, realistic motion, shallow depth of field, vertical reel`,
+    `fast-paced training shot of ${topic}, premium creator aesthetic, dynamic framing, vertical reel`,
+    `wide dramatic recovery shot of ${topic}, luxury atmosphere, cinematic shadows, vertical reel`,
+    `close portrait of ${topic}, intense focus, moody lighting, vertical reel`,
+    `over-the-shoulder action shot of ${topic}, movement, cinematic depth, vertical reel`,
+    `final transformation moment of ${topic}, premium finish, confident energy, vertical reel`,
+    `closing hero shot of ${topic}, dramatic lighting, polished social reel style, vertical reel`,
   ];
 }
 
@@ -62,15 +71,17 @@ async function generateScript(prompt) {
 You create cinematic short-form reel narration.
 
 Rules:
-- maximum 3 short sentences
+- 8 to 10 short sentences
+- around 120 to 150 words
 - motivational tone
 - premium creator energy
 - natural spoken English
+- strong hook at the start
 - no hashtags
 - no emojis
 - no quotation marks
 - concise and punchy
-        `,
+        `.trim(),
       },
       {
         role: "user",
@@ -96,16 +107,13 @@ professional photography,
 moody contrast,
 shallow depth of field,
 ${prompt}
-    `,
+    `.trim(),
     size: "1024x1536",
   });
 
   const imageBase64 = result.data[0].b64_json;
 
-  fs.writeFileSync(
-    imagePath,
-    Buffer.from(imageBase64, "base64")
-  );
+  fs.writeFileSync(imagePath, Buffer.from(imageBase64, "base64"));
 }
 
 async function generateVoice(text, outputPath) {
@@ -140,97 +148,124 @@ async function runFFmpeg(args) {
   });
 }
 
+async function renderSceneClip(imagePath, clipPath, captionText, zoomSpeed) {
+  await runFFmpeg([
+    "-y",
+    "-loop",
+    "1",
+    "-t",
+    "5",
+    "-i",
+    imagePath,
+    "-vf",
+    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.06)':d=150:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20,format=yuv420p`,
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    clipPath,
+  ]);
+}
+
 async function generateVideo(jobId, prompt) {
   try {
     console.log("🔥 START:", prompt);
 
-    const script = await generateScript(prompt);
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is missing");
+    }
 
-    console.log("📝 Script ready");
+    if (!fs.existsSync(musicFile)) {
+      throw new Error("music.mp3 missing in server/");
+    }
 
     const scenes = buildScenes(prompt);
 
-    const scene1 = path.join(publicDir, `${jobId}-1.png`);
-    const scene2 = path.join(publicDir, `${jobId}-2.png`);
-    const scene3 = path.join(publicDir, `${jobId}-3.png`);
+    const sceneImages = scenes.map((_, index) =>
+      path.join(publicDir, `${jobId}-${index + 1}.png`)
+    );
+
+    const sceneClips = scenes.map((_, index) =>
+      path.join(publicDir, `${jobId}-${index + 1}.mp4`)
+    );
 
     const voiceFile = path.join(publicDir, `${jobId}.mp3`);
+    const concatList = path.join(publicDir, `${jobId}-concat.txt`);
+    const silentVideo = path.join(publicDir, `${jobId}-video-only.mp4`);
     const outputFile = path.join(publicDir, `${jobId}.mp4`);
 
-    console.log("🖼️ Generating scene 1...");
-    await generateImage(scenes[0], scene1);
-    console.log("✅ Scene 1 ready");
+    const script = await generateScript(prompt);
+    console.log("📝 Script ready");
 
-    console.log("🖼️ Generating scene 2...");
-    await generateImage(scenes[1], scene2);
-    console.log("✅ Scene 2 ready");
-
-    console.log("🖼️ Generating scene 3...");
-    await generateImage(scenes[2], scene3);
-    console.log("✅ Scene 3 ready");
+    for (let i = 0; i < scenes.length; i += 1) {
+      console.log(`🖼️ Generating scene ${i + 1}...`);
+      await generateImage(scenes[i], sceneImages[i]);
+      console.log(`✅ Scene ${i + 1} ready`);
+    }
 
     console.log("🎤 Generating voice...");
     await generateVoice(script, voiceFile);
     console.log("✅ Voice ready");
 
-    const captionText = sanitizeDrawtext(
-      prompt.toUpperCase().slice(0, 70)
+    const captionText = sanitizeDrawtext(prompt.toUpperCase().slice(0, 70));
+
+    console.log("🎬 Rendering clips...");
+    for (let i = 0; i < sceneImages.length; i += 1) {
+      await renderSceneClip(
+        sceneImages[i],
+        sceneClips[i],
+        captionText,
+        (0.001 + i * 0.00015).toFixed(5)
+      );
+      console.log(`✅ Clip ${i + 1} ready`);
+    }
+
+    fs.writeFileSync(
+      concatList,
+      sceneClips
+        .map((clipPath) => `file '${clipPath.replace(/'/g, "'\\''")}'`)
+        .join("\n")
     );
 
-    console.log("🎬 Starting ffmpeg...");
-
+    console.log("🎞️ Concatenating video...");
     await runFFmpeg([
       "-y",
+      "-f",
+      "concat",
+      "-safe",
+      "0",
+      "-i",
+      concatList,
+      "-c",
+      "copy",
+      silentVideo,
+    ]);
 
-      "-loop", "1",
-      "-t", "2.5",
-      "-i", scene1,
-
-      "-loop", "1",
-      "-t", "2.5",
-      "-i", scene2,
-
-      "-loop", "1",
-      "-t", "2.5",
-      "-i", scene3,
-
-      "-i", voiceFile,
-
-      "-stream_loop", "-1",
-      "-i", musicFile,
-
+    console.log("🎵 Adding voice and music...");
+    await runFFmpeg([
+      "-y",
+      "-i",
+      silentVideo,
+      "-i",
+      voiceFile,
+      "-stream_loop",
+      "-1",
+      "-i",
+      musicFile,
       "-filter_complex",
-      `
-[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v0];
-
-[1:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v1];
-
-[2:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.08)':d=75:s=1080x1920:fps=30,format=yuv420p[v2];
-
-[v0][v1][v2]concat=n=3:v=1:a=0[vv];
-
-[vv]drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20[v];
-
-[3:a]volume=1[a1];
-
-[4:a]volume=0.12[a2];
-
-[a1][a2]amix=inputs=2:duration=first[a]
-      `,
-
-      "-map", "[v]",
-      "-map", "[a]",
-
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-pix_fmt", "yuv420p",
-
-      "-c:a", "aac",
-
-      "-shortest",
-
-      "-movflags", "+faststart",
-
+      "[1:a]volume=1.35,apad[voice];[2:a]volume=0.12[music];[voice][music]amix=inputs=2:duration=longest:dropout_transition=2[a]",
+      "-map",
+      "0:v",
+      "-map",
+      "[a]",
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-t",
+      "60",
+      "-movflags",
+      "+faststart",
       outputFile,
     ]);
 
@@ -241,6 +276,17 @@ async function generateVideo(jobId, prompt) {
       videoUrl: `/${jobId}.mp4`,
     });
 
+    for (const file of [
+      ...sceneImages,
+      ...sceneClips,
+      voiceFile,
+      concatList,
+      silentVideo,
+    ]) {
+      try {
+        fs.unlinkSync(file);
+      } catch {}
+    }
   } catch (err) {
     console.error("❌ ERROR:", err);
 
@@ -276,7 +322,6 @@ app.post("/generate-video", async (req, res) => {
     res.json({
       jobId,
     });
-
   } catch (err) {
     console.error(err);
 
