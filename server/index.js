@@ -62,7 +62,22 @@ function buildScenes(prompt) {
     `over-the-shoulder action shot of ${topic}, movement, cinematic depth, vertical reel`,
     `final transformation moment of ${topic}, premium finish, confident energy, vertical reel`,
     `closing hero shot of ${topic}, dramatic lighting, polished social reel style, vertical reel`,
-  ];
+  ].slice(0, SCENE_COUNT);
+}
+
+function splitIntoCaptions(script, count) {
+  const parts = (script.match(/[^.!?]+[.!?]*/g) || [script])
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const captions = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const text = parts[i] || parts[parts.length - 1] || script;
+    captions.push(sanitizeDrawtext(text.toUpperCase().slice(0, 90)));
+  }
+
+  return captions;
 }
 
 async function generateScript(prompt) {
@@ -72,11 +87,12 @@ async function generateScript(prompt) {
       {
         role: "system",
         content: `
-You create cinematic short-form reel narration.
+You create cinematic reel narration.
 
 Rules:
-- 8 to 10 short sentences
-- around 120 to 150 words
+- 12 to 15 short sentences
+- around 140 to 170 words
+- enough for a 45 to 60 second reel
 - motivational tone
 - premium creator energy
 - natural spoken English
@@ -160,7 +176,7 @@ async function renderSceneClip(imagePath, clipPath, captionText, zoomSpeed) {
     "-i",
     imagePath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.06)':d=150:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20,format=yuv420p`,
+    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.03)':d=150:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20,format=yuv420p`,
     "-c:v",
     "libx264",
     "-pix_fmt",
@@ -209,14 +225,14 @@ async function generateVideo(jobId, prompt) {
     await generateVoice(script, voiceFile);
     console.log("✅ Voice ready");
 
-    const captionText = sanitizeDrawtext(prompt.toUpperCase().slice(0, 70));
+    const sceneCaptions = splitIntoCaptions(script, sceneImages.length);
 
     console.log("🎬 Rendering clips...");
     for (let i = 0; i < sceneImages.length; i += 1) {
       await renderSceneClip(
         sceneImages[i],
         sceneClips[i],
-        captionText,
+        sceneCaptions[i],
         (0.00025 + i * 0.00002).toFixed(5)
       );
       console.log(`✅ Clip ${i + 1} ready`);
@@ -255,7 +271,7 @@ async function generateVideo(jobId, prompt) {
       "-i",
       musicFile,
       "-filter_complex",
-      "[1:a]volume=1.35,apad[voice];[2:a]volume=0.12[music];[voice][music]amix=inputs=2:duration=longest:dropout_transition=2[a]",
+      "[1:a]volume=1.35,apad[voice];[2:a]volume=0.05[music];[voice][music]amix=inputs=2:duration=longest:dropout_transition=2[a]",
       "-map",
       "0:v",
       "-map",
