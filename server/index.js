@@ -23,9 +23,9 @@ const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const musicFile = path.join(rootDir, "server", "music.mp3");
 
-const SCENE_COUNT = 6;
-const SCENE_DURATION = 4;
-const TOTAL_DURATION = 24;
+const SCENE_COUNT = 12;
+const SCENE_DURATION = 5;
+const TOTAL_DURATION = 60;
 
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
@@ -46,45 +46,32 @@ function sanitizeDrawtext(text = "") {
     .trim();
 }
 
-function buildScenes(prompt, mode = "image") {
-  const topic = prompt.trim();
-
-  if (mode === "video") {
-    return [
-      `dynamic cinematic opening of ${topic}, premium motion, dramatic lighting, vertical reel`,
-      `close-up action of ${topic}, realistic movement, sweat, intense focus, vertical reel`,
-      `side profile shot of ${topic}, powerful motion, cinematic depth, vertical reel`,
-      `hero shot of ${topic}, confident pose, premium lighting, vertical reel`,
-      `training detail shot of ${topic}, hands and weight movement, vertical reel`,
-      `final dramatic frame of ${topic}, polished creator style, vertical reel`,
-    ].slice(0, SCENE_COUNT);
-  }
-
-  return [
-    `wide establishing shot of ${topic}, luxury gym interior, cinematic, moody, dramatic lighting, vertical reel`,
-    `close-up action shot of ${topic}, intense training, sweat, motion, shallow depth of field, vertical reel`,
-    `side profile action shot of ${topic}, movement, premium cinematic lighting, vertical reel`,
-    `hero final shot of ${topic}, confident pose, dramatic lighting, premium cinematic finish, vertical reel`,
-    `low angle shot of ${topic}, powerful posture, cinematic contrast, vertical reel`,
-    `details of hands and weights during ${topic}, realistic motion, shallow depth of field, vertical reel`,
-  ].slice(0, SCENE_COUNT);
-}
-
-function splitIntoCaptions(script, count) {
-  const parts = (script.match(/[^.!?]+[.!?]*/g) || [script])
+function splitCaptionText(script) {
+  const parts = script
+    .split(/[.!?]/)
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const captions = [];
+  return parts.length ? parts : [script];
+}
 
-  for (let i = 0; i < count; i += 1) {
-    const text = parts[i] || parts[parts.length - 1] || script;
-    captions.push(
-      sanitizeDrawtext(text.toUpperCase().slice(0, 90))
-    );
-  }
+function buildScenes(prompt) {
+  const topic = prompt.trim();
 
-  return captions;
+  return [
+    `wide establishing shot of ${topic}, luxury gym interior, cinematic, moody lighting, vertical reel`,
+    `close-up action shot of ${topic}, intense training, sweat, shallow depth of field`,
+    `side profile action shot of ${topic}, movement, cinematic lighting`,
+    `hero shot of ${topic}, confident pose, dramatic lighting`,
+    `low angle shot of ${topic}, powerful posture, cinematic contrast`,
+    `details of hands and weights during ${topic}, realistic motion`,
+    `fast-paced training shot of ${topic}, dynamic framing`,
+    `wide dramatic recovery shot of ${topic}, cinematic shadows`,
+    `close portrait of ${topic}, intense focus, moody atmosphere`,
+    `over-the-shoulder action shot of ${topic}, movement and energy`,
+    `final transformation moment of ${topic}, premium finish`,
+    `closing hero shot of ${topic}, polished social reel style`,
+  ];
 }
 
 async function generateScript(prompt) {
@@ -94,12 +81,11 @@ async function generateScript(prompt) {
       {
         role: "system",
         content: `
-You create cinematic reel narration.
+You create cinematic short-form reel narration.
 
 Rules:
-- 6 to 8 short sentences
-- around 80 to 120 words
-- enough for a 20 to 30 second reel
+- 8 to 10 short sentences
+- around 120 to 150 words
 - motivational tone
 - premium creator energy
 - natural spoken English
@@ -139,7 +125,11 @@ ${prompt}
   });
 
   const imageBase64 = result.data[0].b64_json;
-  fs.writeFileSync(imagePath, Buffer.from(imageBase64, "base64"));
+
+  fs.writeFileSync(
+    imagePath,
+    Buffer.from(imageBase64, "base64")
+  );
 }
 
 async function generateVoice(text, outputPath) {
@@ -152,6 +142,7 @@ async function generateVoice(text, outputPath) {
   });
 
   const buffer = Buffer.from(await speech.arrayBuffer());
+
   fs.writeFileSync(outputPath, buffer);
 }
 
@@ -173,7 +164,12 @@ async function runFFmpeg(args) {
   });
 }
 
-async function renderSceneClip(imagePath, clipPath, captionText) {
+async function renderSceneClip(
+  imagePath,
+  clipPath,
+  captionText,
+  zoomSpeed
+) {
   await runFFmpeg([
     "-y",
     "-loop",
@@ -183,7 +179,7 @@ async function renderSceneClip(imagePath, clipPath, captionText) {
     "-i",
     imagePath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=text='${captionText}':fontcolor=white:fontsize=54:x=(w-text_w)/2:y=h-220:borderw=4:bordercolor=black:box=1:boxcolor=black@0.45:boxborderw=20,format=yuv420p`,
+    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.06)':d=150:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=42:line_spacing=10:x=(w-text_w)/2:y=h-260:box=1:boxcolor=black@0.55:boxborderw=28:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`,
     "-c:v",
     "libx264",
     "-pix_fmt",
@@ -192,19 +188,19 @@ async function renderSceneClip(imagePath, clipPath, captionText) {
   ]);
 }
 
-async function generateVideo(jobId, prompt, mode = "image") {
+async function generateVideo(jobId, prompt) {
   try {
     console.log("🔥 START:", prompt);
 
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is missing");
+      throw new Error("OPENAI_API_KEY missing");
     }
 
     if (!fs.existsSync(musicFile)) {
       throw new Error("music.mp3 missing in server/");
     }
 
-    const scenes = buildScenes(prompt, mode);
+    const scenes = buildScenes(prompt);
 
     const sceneImages = scenes.map((_, index) =>
       path.join(publicDir, `${jobId}-${index + 1}.png`)
@@ -220,34 +216,60 @@ async function generateVideo(jobId, prompt, mode = "image") {
     const outputFile = path.join(publicDir, `${jobId}.mp4`);
 
     const script = await generateScript(prompt);
+
     console.log("📝 Script ready");
+
+    const captions = splitCaptionText(script);
 
     for (let i = 0; i < scenes.length; i += 1) {
       console.log(`🖼️ Generating scene ${i + 1}...`);
-      await generateImage(scenes[i], sceneImages[i]);
+
+      await generateImage(
+        scenes[i],
+        sceneImages[i]
+      );
+
       console.log(`✅ Scene ${i + 1} ready`);
     }
 
     console.log("🎤 Generating voice...");
+
     await generateVoice(script, voiceFile);
+
     console.log("✅ Voice ready");
 
-    const sceneCaptions = splitIntoCaptions(script, sceneImages.length);
-
     console.log("🎬 Rendering clips...");
+
     for (let i = 0; i < sceneImages.length; i += 1) {
-      await renderSceneClip(sceneImages[i], sceneClips[i], sceneCaptions[i]);
+      const caption =
+        captions[i % captions.length];
+
+      const safeCaption = sanitizeDrawtext(
+        caption.toUpperCase()
+      );
+
+      await renderSceneClip(
+        sceneImages[i],
+        sceneClips[i],
+        safeCaption,
+        (0.00025 + i * 0.00002).toFixed(5)
+      );
+
       console.log(`✅ Clip ${i + 1} ready`);
     }
 
     fs.writeFileSync(
       concatList,
       sceneClips
-        .map((clipPath) => `file '${clipPath.replace(/'/g, "'\\''")}'`)
+        .map(
+          (clipPath) =>
+            `file '${clipPath.replace(/'/g, "'\\''")}'`
+        )
         .join("\n")
     );
 
-    console.log("🎞️ Concatenating video...");
+    console.log("🎞️ Concatenating clips...");
+
     await runFFmpeg([
       "-y",
       "-f",
@@ -261,7 +283,8 @@ async function generateVideo(jobId, prompt, mode = "image") {
       silentVideo,
     ]);
 
-    console.log("🎵 Adding voice and music...");
+    console.log("🎵 Adding audio mix...");
+
     await runFFmpeg([
       "-y",
       "-i",
@@ -273,7 +296,7 @@ async function generateVideo(jobId, prompt, mode = "image") {
       "-i",
       musicFile,
       "-filter_complex",
-      "[1:a]volume=1.35,apad[voice];[2:a]volume=0.05[music];[voice][music]amix=inputs=2:duration=longest:dropout_transition=2[a]",
+      "[1:a]volume=1.5,apad=pad_dur=60[voice];[2:a]volume=0.10[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=3[a]",
       "-map",
       "0:v",
       "-map",
@@ -323,7 +346,7 @@ app.get("/", (req, res) => {
 
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt, mode } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt) {
       return res.status(400).json({
@@ -337,7 +360,7 @@ app.post("/generate-video", async (req, res) => {
       status: "processing",
     });
 
-    generateVideo(jobId, prompt, mode || "image");
+    generateVideo(jobId, prompt);
 
     res.json({
       jobId,
