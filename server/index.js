@@ -23,10 +23,9 @@ const rootDir = process.cwd();
 const publicDir = path.join(rootDir, "public");
 const musicFile = path.join(rootDir, "server", "music.mp3");
 
-const IMAGE_SCENE_COUNT = 6;
-const IMAGE_SCENE_DURATION = 10;
-const VIDEO_SCENE_DURATION = 60;
-const TOTAL_DURATION = 60;
+const IMAGE_SCENE_COUNT = 4;
+const IMAGE_SCENE_DURATION = 5;
+const TOTAL_DURATION = 20;
 
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
@@ -68,8 +67,6 @@ function buildScenes(prompt, mode = "image") {
     `wide establishing shot of ${topic}, luxury environment, cinematic lighting, vertical reel`,
     `close-up action shot of ${topic}, intense emotion, shallow depth of field, vertical reel`,
     `side profile cinematic shot of ${topic}, movement and energy, dramatic shadows, vertical reel`,
-    `low angle power shot of ${topic}, confident posture, cinematic contrast, vertical reel`,
-    `detailed motion shot of ${topic}, realistic movement, premium creator aesthetic, vertical reel`,
     `final transformation hero shot of ${topic}, emotional cinematic ending, dramatic lighting, vertical reel`,
   ].slice(0, IMAGE_SCENE_COUNT);
 }
@@ -84,8 +81,9 @@ async function generateScript(prompt) {
 You create cinematic short-form reel narration.
 
 Rules:
-- 8 to 10 short sentences
-- around 120 to 150 words
+- 6 to 8 short sentences
+- around 70 to 100 words
+- enough for a 15 to 25 second reel
 - motivational tone
 - premium creator energy
 - natural spoken English
@@ -159,14 +157,15 @@ async function runFFmpeg(args) {
   });
 }
 
-async function renderSceneClip(
-  imagePath,
-  clipPath,
-  captionText,
-  sceneDuration,
-  zoomSpeed
-) {
-  await runFFmpeg([
+async function renderSceneClip(imagePath, clipPath, captionText, sceneDuration, zoomSpeed, mode = "image") {
+  const videoFilter =
+    mode === "video"
+      ? `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.02)':d=${Math.round(
+          sceneDuration * 30
+        )}:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=38:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`
+      : `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=text='${captionText}':fontcolor=white:fontsize=38:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`;
+
+  const args = [
     "-y",
     "-loop",
     "1",
@@ -175,15 +174,17 @@ async function renderSceneClip(
     "-i",
     imagePath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.03)':d=${Math.round(
-      sceneDuration * 30
-    )}:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=42:line_spacing=10:x=(w-text_w)/2:y=h-260:box=1:boxcolor=black@0.55:boxborderw=28:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`,
+    videoFilter,
     "-c:v",
     "libx264",
+    "-preset",
+    "ultrafast",
     "-pix_fmt",
     "yuv420p",
     clipPath,
-  ]);
+  ];
+
+  await runFFmpeg(args);
 }
 
 async function generateVideo(jobId, prompt, mode = "image") {
@@ -219,17 +220,18 @@ async function generateVideo(jobId, prompt, mode = "image") {
     const silentVideo = path.join(publicDir, `${jobId}-video-only.mp4`);
     const outputFile = path.join(publicDir, `${jobId}.mp4`);
 
-    const sceneDuration =
-      safeMode === "video" ? VIDEO_SCENE_DURATION : IMAGE_SCENE_DURATION;
+    const sceneDuration = safeMode === "video" ? 20 : IMAGE_SCENE_DURATION;
+
+    // Image generation and voice generation can happen in parallel after the script is ready.
+    console.log("🎬 Starting asset generation...");
+    const imageTasks = sceneImages.map((imgPath, i) => generateImage(scenes[i], imgPath));
+    const voiceTask = generateVoice(script, voiceFile);
+
+    await Promise.all([...imageTasks, voiceTask]);
 
     for (let i = 0; i < scenes.length; i += 1) {
-      console.log(`🖼️ Generating scene ${i + 1}...`);
-      await generateImage(scenes[i], sceneImages[i]);
-      console.log(`✅ Scene ${i + 1} ready`);
+      console.log(`✅ Asset ${i + 1} ready`);
     }
-
-    console.log("🎤 Generating voice...");
-    await generateVoice(script, voiceFile);
     console.log("✅ Voice ready");
 
     console.log("🎬 Rendering clips...");
@@ -242,9 +244,8 @@ async function generateVideo(jobId, prompt, mode = "image") {
         sceneClips[i],
         safeCaption,
         sceneDuration,
-        safeMode === "video"
-          ? "0.00005"
-          : (0.00025 + i * 0.00002).toFixed(5)
+        safeMode === "video" ? "0.00005" : "0.00020",
+        safeMode
       );
 
       console.log(`✅ Clip ${i + 1} ready`);
@@ -283,7 +284,7 @@ async function generateVideo(jobId, prompt, mode = "image") {
       "-i",
       musicFile,
       "-filter_complex",
-      "[1:a]volume=1.5,apad=pad_dur=60[voice];[2:a]volume=0.10[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=3[a]",
+      "[1:a]volume=1.45,apad=pad_dur=30[voice];[2:a]volume=0.08[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=3[a]",
       "-map",
       "0:v",
       "-map",
