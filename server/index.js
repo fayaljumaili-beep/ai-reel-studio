@@ -25,7 +25,6 @@ const musicFile = path.join(rootDir, "server", "music.mp3");
 
 const IMAGE_SCENE_COUNT = 6;
 const IMAGE_SCENE_DURATION = 10;
-const VIDEO_SCENE_COUNT = 1;
 const VIDEO_SCENE_DURATION = 60;
 const TOTAL_DURATION = 60;
 
@@ -66,12 +65,12 @@ function buildScenes(prompt, mode = "image") {
   }
 
   return [
-    `wide establishing shot of ${topic}, luxury gym interior, cinematic, moody lighting, vertical reel`,
-    `close-up action shot of ${topic}, intense training, sweat, shallow depth of field`,
-    `side profile action shot of ${topic}, movement, cinematic lighting`,
-    `hero shot of ${topic}, confident pose, dramatic lighting`,
-    `low angle shot of ${topic}, powerful posture, cinematic contrast`,
-    `details of hands and weights during ${topic}, realistic motion`,
+    `wide establishing shot of ${topic}, luxury environment, cinematic lighting, vertical reel`,
+    `close-up action shot of ${topic}, intense emotion, shallow depth of field, vertical reel`,
+    `side profile cinematic shot of ${topic}, movement and energy, dramatic shadows, vertical reel`,
+    `low angle power shot of ${topic}, confident posture, cinematic contrast, vertical reel`,
+    `detailed motion shot of ${topic}, realistic movement, premium creator aesthetic, vertical reel`,
+    `final transformation hero shot of ${topic}, emotional cinematic ending, dramatic lighting, vertical reel`,
   ].slice(0, IMAGE_SCENE_COUNT);
 }
 
@@ -205,7 +204,7 @@ async function generateVideo(jobId, prompt, mode = "image") {
     const script = await generateScript(prompt);
     console.log("📝 Script ready");
 
-    const captionsSource = splitCaptionText(script);
+    const captions = splitCaptionText(script);
 
     const sceneImages = scenes.map((_, index) =>
       path.join(publicDir, `${jobId}-${index + 1}.png`)
@@ -235,7 +234,7 @@ async function generateVideo(jobId, prompt, mode = "image") {
 
     console.log("🎬 Rendering clips...");
     for (let i = 0; i < sceneImages.length; i += 1) {
-      const caption = captionsSource[i % captionsSource.length];
+      const caption = captions[i % captions.length];
       const safeCaption = sanitizeDrawtext(caption.toUpperCase().slice(0, 90));
 
       await renderSceneClip(
