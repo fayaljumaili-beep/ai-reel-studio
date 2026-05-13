@@ -35,23 +35,59 @@ app.use(express.static(publicDir));
 
 const jobs = new Map();
 
-function sanitizeDrawtext(text = "") {
+function escapeForDrawtext(text = "") {
   return text
-    .replace(/\\/g, "\\\\")
     .replace(/:/g, "\\:")
     .replace(/'/g, "")
     .replace(/%/g, "\\%")
     .replace(/,/g, "\\,")
-    .replace(/\n/g, " ")
+    .replace(/\r/g, "")
     .trim();
 }
 
+function wrapCaption(text = "", maxCharsPerLine = 24, maxLines = 2) {
+  const words = text.toUpperCase().replace(/\s+/g, " ").trim().split(" ");
+  const lines = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+
+    if (candidate.length > maxCharsPerLine && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+
+    if (lines.length === maxLines) break;
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  const limited = lines.slice(0, maxLines);
+  if (lines.length > maxLines && limited.length) {
+    limited[limited.length - 1] = `${limited[limited.length - 1]}...`;
+  }
+
+  return escapeForDrawtext(limited.join("\\n"));
+}
+
 function splitCaptionText(script) {
-  const parts = (script.match(/[^.!?]+[.!?]*/g) || [script])
+  const byLine = script
+    .split(/\r?\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
 
-  return parts.length ? parts : [script];
+  if (byLine.length >= 2) return byLine;
+
+  const bySentence = (script.match(/[^.!?]+[.!?]*/g) || [script])
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return bySentence.length ? bySentence : [script];
 }
 
 function buildScenes(prompt, mode = "image") {
@@ -78,12 +114,14 @@ async function generateScript(prompt) {
       {
         role: "system",
         content: `
-You create cinematic short-form reel narration.
+You create cinematic reel narration.
 
 Rules:
-- 6 to 8 short sentences
-- around 70 to 100 words
-- enough for a 15 to 25 second reel
+- exactly 4 short lines
+- each line is one sentence
+- each line should be 8 to 12 words
+- total around 35 to 45 words
+- enough for about 18 to 25 seconds when spoken
 - motivational tone
 - premium creator energy
 - natural spoken English
@@ -157,15 +195,24 @@ async function runFFmpeg(args) {
   });
 }
 
-async function renderSceneClip(imagePath, clipPath, captionText, sceneDuration, zoomSpeed, mode = "image") {
-  const videoFilter =
+async function renderSceneClip(
+  imagePath,
+  clipPath,
+  captionText,
+  sceneDuration,
+  zoomSpeed,
+  mode = "image"
+) {
+  const filter =
     mode === "video"
       ? `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.02)':d=${Math.round(
           sceneDuration * 30
-        )}:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=38:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`
-      : `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,drawtext=text='${captionText}':fontcolor=white:fontsize=38:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`;
+        )}:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=36:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`
+      : `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+${zoomSpeed},1.03)':d=${Math.round(
+          sceneDuration * 30
+        )}:s=1080x1920:fps=30,drawtext=text='${captionText}':fontcolor=white:fontsize=36:line_spacing=8:x=(w-text_w)/2:y=h-240:box=1:boxcolor=black@0.55:boxborderw=24:borderw=2:bordercolor=black:fix_bounds=true,format=yuv420p`;
 
-  const args = [
+  await runFFmpeg([
     "-y",
     "-loop",
     "1",
@@ -174,7 +221,7 @@ async function renderSceneClip(imagePath, clipPath, captionText, sceneDuration, 
     "-i",
     imagePath,
     "-vf",
-    videoFilter,
+    filter,
     "-c:v",
     "libx264",
     "-preset",
@@ -182,9 +229,7 @@ async function renderSceneClip(imagePath, clipPath, captionText, sceneDuration, 
     "-pix_fmt",
     "yuv420p",
     clipPath,
-  ];
-
-  await runFFmpeg(args);
+  ]);
 }
 
 async function generateVideo(jobId, prompt, mode = "image") {
@@ -201,8 +246,8 @@ async function generateVideo(jobId, prompt, mode = "image") {
 
     const safeMode = mode === "video" ? "video" : "image";
     const scenes = buildScenes(prompt, safeMode);
-
     const script = await generateScript(prompt);
+
     console.log("📝 Script ready");
 
     const captions = splitCaptionText(script);
@@ -222,22 +267,22 @@ async function generateVideo(jobId, prompt, mode = "image") {
 
     const sceneDuration = safeMode === "video" ? 20 : IMAGE_SCENE_DURATION;
 
-    // Image generation and voice generation can happen in parallel after the script is ready.
-    console.log("🎬 Starting asset generation...");
-    const imageTasks = sceneImages.map((imgPath, i) => generateImage(scenes[i], imgPath));
-    const voiceTask = generateVoice(script, voiceFile);
-
-    await Promise.all([...imageTasks, voiceTask]);
+    console.log("🎬 Starting assets...");
+    await Promise.all([
+      ...sceneImages.map((imgPath, i) => generateImage(scenes[i], imgPath)),
+      generateVoice(script, voiceFile),
+    ]);
 
     for (let i = 0; i < scenes.length; i += 1) {
-      console.log(`✅ Asset ${i + 1} ready`);
+      console.log(`✅ Scene ${i + 1} ready`);
     }
+
     console.log("✅ Voice ready");
 
     console.log("🎬 Rendering clips...");
     for (let i = 0; i < sceneImages.length; i += 1) {
-      const caption = captions[i % captions.length];
-      const safeCaption = sanitizeDrawtext(caption.toUpperCase().slice(0, 90));
+      const caption = captions[i % captions.length] || script;
+      const safeCaption = wrapCaption(caption);
 
       await renderSceneClip(
         sceneImages[i],
